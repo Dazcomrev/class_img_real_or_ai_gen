@@ -47,7 +47,7 @@ Base = declarative_base()
 
 # Модели БД
 class User(Base):
-    __tablename__ = '"User"'
+    __tablename__ = 'User'
     UserId = Column(Integer, primary_key=True, index=True)
     Name = Column(String(100), nullable=False)
     Email = Column(String(255), unique=True, index=True, nullable=False)
@@ -198,14 +198,13 @@ def login(form_data: OAuth2PasswordRequestForm = Depends(), db: Session = Depend
 def get_history(current_user=Depends(get_current_user), db: Session = Depends(get_db)):
     if not current_user:
         raise HTTPException(401, "Authorization required")
-    history = db.query(History).filter(History.UserId == current_user.UserId) \
-        .order_by(History.TimeStamp.desc()).limit(50).all()
+    history = db.query(History).filter(History.UserId == current_user.UserId).all()
+    print(f"FOUND {len(history)} records for user {current_user.UserId}")
     return history
 
 
 @app.post('/predict')
 async def predict(
-        #image_id: str = Query(...),
         image_id: Optional[str] = Query(None),
         guest: bool = Query(False),
         file: UploadFile = File(...),
@@ -236,8 +235,8 @@ async def predict(
 
         result_text = "Реальное изображение" if result == 1 else "Изображение сгенерировано нейронной сетью"
 
-        # Save to DB only for registered users
         if current_user and not guest:
+            print(f"SAVING to DB for user {current_user.UserId}")
             history = History(
                 UserId=current_user.UserId,
                 ImagePath=str(file_path),
@@ -248,19 +247,26 @@ async def predict(
             )
             db.add(history)
             db.commit()
+            db.refresh(history)
+            print(f"SAVED! HistoryId: {history.HistoryId}")
 
         return {
-            #"image_id": image_id,
             "image_path": str(file_path),
             "result": result,
             "result_text": result_text,
             "confidence": float(conf),
-            "probabilities": {"real": float(probs[1]), "ai_generated": float(probs[0])}
+            "probabilities": {
+                "real": float(probs[1]),
+                "ai_generated": float(probs[0])
+            }
         }
+
     except Exception as e:
         if file_path.exists():
             file_path.unlink()
-        raise HTTPException(500, str(e))
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=str(e))
 
 app.mount("/uploads", StaticFiles(directory="uploads"), name="uploads")
 if __name__ == '__main__':

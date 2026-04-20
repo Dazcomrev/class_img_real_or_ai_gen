@@ -155,7 +155,7 @@
                 if (response.ok) {
                     alert('Регистрация успешна! Теперь войдите в аккаунт.');
                     switchTab('login');
-                    document.getElementById('reg-form').reset();
+                    document.getElementById('register-form').reset();
                 } else {
                     const error = await response.json();
                     alert(error.detail);
@@ -365,6 +365,7 @@
                     headers: { 'Authorization': `Bearer ${token}` }
                 });
                 const history = await response.json();
+                console.log('History from DB:', history);
                 displayHistory(history);
             } catch (error) {
                 console.error('Ошибка истории:', error);
