@@ -1,0 +1,428 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Детектор AI изображений</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+</head>
+<body class="bg-gradient-to-br from-blue-50 to-indigo-100 min-h-screen">
+    <div class="container mx-auto px-4 py-8 max-w-4xl">
+        <!-- Header -->
+        <div class="text-center mb-12">
+            <h1 class="text-5xl font-bold bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent mb-4">
+                Детектор AI изображений
+            </h1>
+            <p class="text-xl text-gray-600 mb-4">Определяет реальные фото и сгенерированные нейросетями</p>
+            <div class="flex justify-center space-x-4">
+                <button id="login-btn" class="px-6 py-2 bg-blue-500 text-white rounded-xl font-semibold hover:bg-blue-600 hidden">
+                    Войти
+                </button>
+                <button id="logout-btn" class="px-6 py-2 bg-red-500 text-white rounded-xl font-semibold hover:bg-red-600 hidden">
+                    Выйти
+                </button>
+            </div>
+        </div>
+
+        <!-- Auth Panel (скрыт по умолчанию) -->
+        <div id="auth-panel" class="bg-white rounded-2xl shadow-2xl p-8 mb-8 mx-auto max-w-md hidden">
+            <div class="flex justify-center mb-6">
+                <button id="login-tab" class="tab-btn px-8 py-3 bg-blue-500 text-white rounded-xl font-semibold mr-2 active">Войти</button>
+                <button id="register-tab" class="tab-btn px-8 py-3 bg-gray-200 text-gray-700 rounded-xl font-semibold">Регистрация</button>
+            </div>
+
+            <form id="login-form" class="space-y-4">
+                <input type="email" id="login-email" placeholder="Email" class="w-full p-4 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500" required>
+                <input type="password" id="login-password" maxlength="72" placeholder="Пароль" class="w-full p-4 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500" required>
+                <button type="submit" class="w-full bg-blue-500 text-white py-4 rounded-xl font-semibold hover:bg-blue-600">Войти</button>
+            </form>
+
+            <form id="register-form" class="space-y-4 hidden">
+                <input type="text" id="reg-name" placeholder="Имя" class="w-full p-4 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500" required>
+                <input type="email" id="reg-email" placeholder="Email" class="w-full p-4 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500" required>
+                <input type="password" id="reg-password" placeholder="Пароль (макс 72 символа)" maxlength="72" class="w-full p-4 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500" required>
+                <button type="submit" class="w-full bg-green-500 text-white py-4 rounded-xl font-semibold hover:bg-green-600">Зарегистрироваться</button>
+            </form>
+            <p class="text-center text-sm text-gray-500 mt-4">
+                Регистрация сохранит вашу историю проверок
+            </p>
+        </div>
+
+        <!-- Upload Section (всегда виден) -->
+        <div class="bg-white rounded-2xl shadow-2xl p-8 mb-8">
+            <div class="text-center mb-8">
+                <h2 class="text-3xl font-bold text-gray-800 mb-2">Загрузите изображение</h2>
+                <p class="text-gray-600" id="upload-hint">Поддерживаются JPG, PNG до 10MB</p>
+            </div>
+
+            <div class="border-4 border-dashed border-gray-300 rounded-3xl p-12 text-center hover:border-blue-400 transition-all duration-300 hover:bg-blue-50 cursor-pointer mb-8"
+                 id="drop-zone">
+                <div id="drag-icon" class="mx-auto w-20 h-20 bg-gradient-to-r from-blue-500 to-purple-500 rounded-2xl flex items-center justify-center mb-4">
+                    <svg class="w-10 h-10 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"></path>
+                    </svg>
+                </div>
+                <p class="text-lg font-semibold text-gray-700 mb-2">Перетащите изображение сюда или кликните</p>
+                <p class="text-sm text-gray-500">PNG, JPG до 10MB</p>
+                <input type="file" id="image-input" accept="image/*" class="hidden">
+            </div>
+
+            <div id="prediction-result" class="hidden bg-gradient-to-r rounded-2xl p-8 text-center">
+                <div id="confidence-gauge" class="w-full h-4 bg-gray-200 rounded-full mb-6 overflow-hidden mx-auto max-w-md">
+                    <div id="confidence-bar" class="h-full bg-gradient-to-r rounded-full transition-all duration-1000" style="width: 0%"></div>
+                </div>
+                <h3 id="result-text" class="text-3xl font-bold mb-4"></h3>
+                <p id="confidence-text" class="text-2xl text-gray-600 mb-8"></p>
+                <canvas id="prob-chart" class="mx-auto mb-8" width="300" height="150"></canvas>
+                <img id="uploaded-image" class="mx-auto max-h-80 rounded-2xl shadow-lg object-contain" alt="Загруженное изображение">
+            </div>
+        </div>
+
+        <!-- History Section (только для авторизованных) -->
+        <div id="history-section" class="bg-white rounded-2xl shadow-2xl p-8 hidden">
+            <div class="flex justify-between items-center mb-8">
+                <h2 class="text-3xl font-bold text-gray-800">📚 Ваша история проверок</h2>
+                <button id="refresh-history" class="px-6 py-2 bg-blue-500 text-white rounded-xl font-semibold hover:bg-blue-600 flex items-center">
+                    <svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path>
+                    </svg>
+                    Обновить
+                </button>
+            </div>
+            <div id="history-list" class="space-y-4">
+                <div class="text-center py-12 text-gray-500">
+                    Загрузите изображение для сохранения в историю
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let token = localStorage.getItem('token');
+        let isAuthenticated = false;
+
+        // Проверка токена при загрузке
+        if (token) {
+            checkAuth();
+        } else {
+            updateUI();
+        }
+
+        // Кнопка входа
+        document.getElementById('login-btn').onclick = () => {
+            document.getElementById('auth-panel').classList.remove('hidden');
+        };
+
+        // Вкладки
+        document.getElementById('login-tab').onclick = () => switchTab('login');
+        document.getElementById('register-tab').onclick = () => switchTab('register');
+
+        function switchTab(tab) {
+            document.querySelectorAll('.tab-btn').forEach(btn => {
+                btn.classList.remove('bg-blue-500', 'text-white');
+                btn.classList.add('bg-gray-200', 'text-gray-700');
+            });
+            document.querySelectorAll('form').forEach(form => form.classList.add('hidden'));
+
+            if (tab === 'login') {
+                document.getElementById('login-tab').classList.remove('bg-gray-200', 'text-gray-700');
+                document.getElementById('login-tab').classList.add('bg-blue-500', 'text-white');
+                document.getElementById('login-form').classList.remove('hidden');
+            } else {
+                document.getElementById('register-tab').classList.remove('bg-gray-200', 'text-gray-700');
+                document.getElementById('register-tab').classList.add('bg-blue-500', 'text-white');
+                document.getElementById('register-form').classList.remove('hidden');
+            }
+        }
+
+        // Регистрация
+        document.getElementById('register-form').onsubmit = async (e) => {
+            e.preventDefault();
+            const data = {
+                name: document.getElementById('reg-name').value,
+                email: document.getElementById('reg-email').value,
+                password: document.getElementById('reg-password').value
+            };
+
+            try {
+                const response = await fetch('/register', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify(data)
+                });
+
+                if (response.ok) {
+                    alert('Регистрация успешна! Теперь войдите в аккаунт.');
+                    switchTab('login');
+                    document.getElementById('reg-form').reset();
+                } else {
+                    const error = await response.json();
+                    alert(error.detail);
+                }
+            } catch (error) {
+                alert('Ошибка сервера: ' + error.message);
+            }
+        };
+
+        // Авторизация
+        document.getElementById('login-form').onsubmit = async (e) => {
+            e.preventDefault();
+            const data = new URLSearchParams({
+                username: document.getElementById('login-email').value,
+                password: document.getElementById('login-password').value
+            });
+
+            try {
+                const response = await fetch('/token', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/x-www-form-urlencoded'},
+                    body: data
+                });
+
+                if (response.ok) {
+                    const result = await response.json();
+                    token = result.access_token;
+                    localStorage.setItem('token', token);
+                    await checkAuth();
+                    document.getElementById('auth-panel').classList.add('hidden');
+                } else {
+                    const error = await response.json();
+                    alert(error.detail);
+                }
+            } catch (error) {
+                alert('Ошибка сервера');
+            }
+        };
+
+        async function checkAuth() {
+            try {
+                const response = await fetch('/history', {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+                if (response.ok) {
+                    isAuthenticated = true;
+                }
+            } catch (error) {
+                localStorage.removeItem('token');
+                token = null;
+                isAuthenticated = false;
+            }
+            updateUI();
+        }
+
+        function updateUI() {
+            const uploadHint = document.getElementById('upload-hint');
+
+            if (isAuthenticated) {
+                document.getElementById('login-btn').classList.add('hidden');
+                document.getElementById('logout-btn').classList.remove('hidden');
+                document.getElementById('history-section').classList.remove('hidden');
+                uploadHint.textContent = 'Ваша проверка автоматически сохранится в историю';
+                loadHistory();
+            } else {
+                document.getElementById('login-btn').classList.remove('hidden');
+                document.getElementById('logout-btn').classList.add('hidden');
+                document.getElementById('history-section').classList.add('hidden');
+                uploadHint.innerHTML = 'Поддерживаются JPG, PNG до 10MB <span class="font-semibold text-blue-600">(Зарегистрируйтесь для сохранения истории)</span>';
+            }
+        }
+
+        // Drag & Drop
+        const dropZone = document.getElementById('drop-zone');
+        const fileInput = document.getElementById('image-input');
+
+        ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eventName => {
+            dropZone.addEventListener(eventName, preventDefaults, false);
+        });
+
+        function preventDefaults(e) {
+            e.preventDefault();
+            e.stopPropagation();
+        }
+
+        ['dragenter', 'dragover'].forEach(eventName => {
+            dropZone.addEventListener(eventName, highlight, false);
+        });
+
+        ['dragleave', 'drop'].forEach(eventName => {
+            dropZone.addEventListener(eventName, unhighlight, false);
+        });
+
+        function highlight(e) {
+            dropZone.classList.add('bg-blue-50', 'border-blue-400');
+        }
+
+        function unhighlight(e) {
+            dropZone.classList.remove('bg-blue-50', 'border-blue-400');
+        }
+
+        dropZone.addEventListener('click', () => fileInput.click());
+        fileInput.addEventListener('change', () => {
+            if (fileInput.files[0]) uploadFile(fileInput.files[0]);
+        });
+
+        dropZone.addEventListener('drop', (e) => {
+            const file = e.dataTransfer.files[0];
+            if (file) uploadFile(file);
+        });
+
+        async function uploadFile(file) {
+            if (file.size > 10 * 1024 * 1024) {
+                alert('Файл слишком большой (макс 10MB)');
+                return;
+            }
+
+            const formData = new FormData();
+            formData.append('file', file);
+            formData.append('image_id', file.name);
+
+            // Показываем загрузку
+            dropZone.innerHTML = '<div class="text-center"><div class="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500 mx-auto mb-4"></div><p class="text-lg font-semibold text-gray-700">Анализируем изображение...</p></div>';
+
+            try {
+                const response = await fetch('/predict' + (isAuthenticated ? '' : '?guest=true'), {
+                    method: 'POST',
+                    headers: isAuthenticated ? { 'Authorization': `Bearer ${token}` } : {},
+                    body: formData
+                });
+
+                if (!response.ok) {
+                    throw new Error(await response.text());
+                }
+
+                const result = await response.json();
+                showPrediction(result);
+                if (isAuthenticated) loadHistory();
+            } catch (error) {
+                dropZone.innerHTML = '<p class="text-red-500 font-semibold">Ошибка анализа: ' + error.message + '</p><button onclick="location.reload()" class="mt-4 px-6 py-2 bg-blue-500 text-white rounded-xl">Попробовать снова</button>';
+            }
+        }
+
+        function showPrediction(result) {
+            const resultDiv = document.getElementById('prediction-result');
+            const resultText = document.getElementById('result-text');
+            const confidenceText = document.getElementById('confidence-text');
+            const confidenceBar = document.getElementById('confidence-bar');
+            const uploadedImage = document.getElementById('uploaded-image');
+
+            resultDiv.classList.remove('hidden');
+            uploadedImage.src = result.image_path + '?' + Date.now();
+
+            const isReal = result.result === 1;
+            resultText.textContent = result.result_text;
+            resultText.className = isReal
+                ? 'text-3xl font-bold mb-4 text-green-600 animate-pulse'
+                : 'text-3xl font-bold mb-4 text-red-600 animate-pulse';
+
+            const confidencePercent = Math.round(result.confidence * 100);
+            confidenceText.textContent = `Уверенность: ${confidencePercent}%`;
+            confidenceBar.style.width = `${confidencePercent}%`;
+            confidenceBar.className = isReal
+                ? 'h-full bg-gradient-to-r from-green-400 to-green-600 rounded-full transition-all duration-1000 animate-pulse'
+                : 'h-full bg-gradient-to-r from-red-400 to-red-600 rounded-full transition-all duration-1000 animate-pulse';
+
+            // График
+            const canvas = document.getElementById('prob-chart');
+            canvas.width = 300;
+            canvas.height = 200;
+            canvas.style.height = '200px';  // ФИКС CSS!
+
+            const ctx = canvas.getContext('2d');
+            if (window.probChart) {
+                window.probChart.destroy();
+            }
+            window.probChart = new Chart(ctx, {
+                type: 'doughnut',
+                data: {
+                    labels: ['AI', 'Реальное'],
+                    datasets: [{
+                        data: [result.probabilities.ai_generated, result.probabilities.real],
+                        backgroundColor: ['#ef4444', '#10b981'],
+                        borderWidth: 3,
+                        borderColor: '#ffffff'
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: true,
+                    height: 200,
+                    cutout: '65%',
+                    plugins: {
+                        legend: {
+                            position: 'bottom',
+                            labels: { padding: 20 }
+                        }
+                    }
+                }
+            });
+        }
+
+        // История (только для авторизованных)
+        async function loadHistory() {
+            try {
+                const response = await fetch('/history', {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+                const history = await response.json();
+                displayHistory(history);
+            } catch (error) {
+                console.error('Ошибка истории:', error);
+            }
+        }
+
+        function displayHistory(history) {
+            const container = document.getElementById('history-list');
+            if (!history || history.length === 0) {
+                container.innerHTML = '<div class="text-center py-12 text-gray-500 col-span-full">Загрузите изображение для сохранения в историю</div>';
+                return;
+            }
+
+            container.innerHTML = history.map(item => `
+                <div class="flex items-start p-6 bg-gray-50 rounded-xl hover:bg-gray-100 transition-all group">
+                    <img src="${item.ImagePath}" alt="История" class="w-20 h-20 object-cover rounded-lg mr-4 flex-shrink-0 shadow-md hover:scale-105 transition-transform">
+                    <div class="flex-1 min-w-0">
+                        <div class="font-semibold text-lg mb-1 truncate text-gray-900 group-hover:text-blue-600">
+                            ${new Date(item.TimeStamp).toLocaleString('ru-RU', {
+                                year: 'numeric', month: '2-digit', day: '2-digit',
+                                hour: '2-digit', minute: '2-digit'
+                            })}
+                        </div>
+                        <div class="text-2xl font-bold mb-2 ${item.Prediction === 1 ? 'text-green-600' : 'text-red-600'}">
+                            ${item.Prediction === 1 ? 'Реальное изображение' : 'Сгенерировано AI'}
+                        </div>
+                        <div class="flex flex-wrap items-center gap-4 text-sm text-gray-600">
+                            <span class="px-3 py-1 bg-blue-100 text-blue-800 rounded-full">
+                                Уверенность: ${Math.round(item.Confidence * 100)}%
+                            </span>
+                            <span>Реальное: ${Math.round(item.ProbReal * 100)}%</span>
+                            <span>AI: ${Math.round(item.ProbAI * 100)}%</span>
+                        </div>
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        // События кнопок
+        document.getElementById('refresh-history')?.addEventListener('click', loadHistory);
+        document.getElementById('logout-btn').onclick = () => {
+            localStorage.removeItem('token');
+            token = null;
+            isAuthenticated = false;
+            updateUI();
+            document.getElementById('auth-panel').classList.add('hidden');
+            if (window.probChart) {
+                window.probChart.destroy();
+                document.getElementById('prediction-result').classList.add('hidden');
+            }
+        };
+
+        // Закрытие панели авторизации
+        document.querySelectorAll('form').forEach(form => {
+            form.addEventListener('submit', () => {
+                document.getElementById('auth-panel').classList.add('hidden');
+            });
+        });
+    </script>
+</body>
+</html>
