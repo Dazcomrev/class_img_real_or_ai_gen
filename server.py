@@ -1,4 +1,4 @@
-from fastapi import FastAPI, File, UploadFile, HTTPException, Query, Depends, status
+from fastapi import FastAPI, File, UploadFile, HTTPException, Query, Depends, status, BackgroundTasks
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import HTMLResponse, FileResponse
@@ -6,11 +6,10 @@ from fastapi.staticfiles import StaticFiles
 from sqlalchemy import create_engine, Column, Integer, String, Boolean, Float, DateTime
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker, Session
-from sqlalchemy.sql import func
+from sqlalchemy.sql import func, delete
 from pydantic import BaseModel
 from passlib.context import CryptContext
 from jose import JWTError, jwt
-from datetime import datetime, timedelta, timezone
 from typing import Optional
 import torch
 import torch.nn as nn
@@ -22,8 +21,43 @@ import uuid
 import shutil
 from pathlib import Path
 import uvicorn
+import threading
+import time
+from datetime import datetime, timedelta, timezone
 
-# Настройки БД (ИЗМЕНИТЕ!)
+def cleanup_old_history():
+    while True:
+        try:
+            with SessionLocal() as db:
+                cutoff = datetime.now(timezone.utc) - timedelta(days=30)#minutes=2
+                old_items = (
+                    db.query(History)
+                    .filter(History.TimeStamp < cutoff)
+                    .all()
+                )
+
+                deleted_count = 0
+                for item in old_items:
+                    image_path = Path(item.ImagePath)
+                    if image_path.exists():
+                        image_path.unlink()
+                    db.delete(item)
+                    deleted_count += 1
+
+                if deleted_count > 0:
+                    db.commit()
+                    print(f"Cleared {deleted_count} old items")
+
+        except Exception as e:
+            print(f"Cleanup error: {e}")
+
+        time.sleep(60 * 60)  # раз в час
+
+# Запуск фонового таймера
+cleanup_thread = threading.Thread(target=cleanup_old_history, daemon=True)
+cleanup_thread.start()
+
+# Настройки БД
 DATABASE_URL = "postgresql://postgres:123456@localhost/ClassImgRealOrGenAI"
 SECRET_KEY = "super-secret-key-change-in-production"
 ALGORITHM = "HS256"
@@ -83,7 +117,7 @@ def get_db():
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="token", auto_error=False)
 
-# Модель
+# Модель (без изменений)
 model_path = "best_resnet_last_two_layers_cpu.pkl"
 model = None
 transform = transforms.Compose([
@@ -128,7 +162,7 @@ class HistoryResponse(BaseModel):
     TimeStamp: datetime
 
 
-# JWT utils
+# JWT utils (без изменений)
 def verify_password(plain, hashed):
     return pwd_context.verify(plain, hashed)
 
@@ -158,6 +192,7 @@ async def get_current_user(token: str = Depends(oauth2_scheme), db: Session = De
 
 # Static files
 app.mount("/static", StaticFiles(directory="static"), name="static")
+app.mount("/uploads", StaticFiles(directory="uploads"), name="uploads")
 
 
 @app.get("/")
@@ -173,6 +208,7 @@ def status():
     return {"status": "Server OK", "model": model_status}
 
 
+# Регистрация (без изменений)
 @app.post('/register', status_code=201)
 def register(user_data: UserCreate, db: Session = Depends(get_db)):
     if db.query(User).filter(User.Email == user_data.email).first():
@@ -185,6 +221,7 @@ def register(user_data: UserCreate, db: Session = Depends(get_db)):
     return {"message": "Добавлен пользователь", "user_id": user.UserId}
 
 
+# Логин (без изменений)
 @app.post('/token', response_model=Token)
 def login(form_data: OAuth2PasswordRequestForm = Depends(), db: Session = Depends(get_db)):
     user = db.query(User).filter(User.Email == form_data.username).first()
@@ -194,15 +231,100 @@ def login(form_data: OAuth2PasswordRequestForm = Depends(), db: Session = Depend
     return {"access_token": token, "token_type": "bearer"}
 
 
+# НОВЫЕ ЭНДПОИНТЫ
+
 @app.get('/history', response_model=list[HistoryResponse])
-def get_history(current_user=Depends(get_current_user), db: Session = Depends(get_db)):
+def get_history(
+        sort: str = Query("desc", regex="^(asc|desc)$"),
+        current_user=Depends(get_current_user),
+        db: Session = Depends(get_db)
+):
     if not current_user:
         raise HTTPException(401, "Authorization required")
-    history = db.query(History).filter(History.UserId == current_user.UserId).all()
+
+    query = db.query(History).filter(History.UserId == current_user.UserId)
+
+    if sort == "asc":
+        history = query.order_by(History.TimeStamp.asc()).all()
+    else:
+        history = query.order_by(History.TimeStamp.desc()).all()
+
     print(f"FOUND {len(history)} records for user {current_user.UserId}")
     return history
 
 
+@app.delete('/history/one/{history_id}')
+def delete_history(history_id: int, current_user=Depends(get_current_user), db: Session = Depends(get_db)):
+    if not current_user:
+        raise HTTPException(401, "Authorization required")
+
+    history = db.query(History).filter(
+        History.HistoryId == history_id,
+        History.UserId == current_user.UserId
+    ).first()
+
+    if not history:
+        raise HTTPException(404, "History item not found")
+
+    # Удаляем файл изображения
+    image_path = Path(history.ImagePath)
+    if image_path.exists():
+        image_path.unlink()
+
+    # Удаляем запись из БД
+    db.delete(history)
+    db.commit()
+
+    return {"message": "History item deleted"}
+
+
+@app.delete('/history/all/clear')
+def clear_history(current_user=Depends(get_current_user), db: Session = Depends(get_db)):
+    if not current_user:
+        raise HTTPException(401, "Authorization required")
+
+    print(f"Current user ID: {current_user.UserId}")
+    print(f"History records for user {current_user.UserId}:")
+    q = db.query(History).filter(History.UserId == current_user.UserId)
+    print([h.HistoryId for h in q.all()])
+
+    user_history = q.all()
+
+    for history in user_history:
+        image_path = Path(history.ImagePath)
+        if image_path.exists():
+            image_path.unlink()
+
+    deleted_count = db.query(History).filter(History.UserId == current_user.UserId).delete()
+    db.commit()
+    print(f"Deleted {deleted_count} records")
+
+    return {"message": "History cleared", "deleted_count": deleted_count}
+
+
+@app.delete('/account')
+def delete_account(current_user=Depends(get_current_user), db: Session = Depends(get_db)):
+    if not current_user:
+        raise HTTPException(401, "Authorization required")
+
+    # Удаляем историю и файлы
+    user_history = db.query(History).filter(History.UserId == current_user.UserId).all()
+    for history in user_history:
+        image_path = Path(history.ImagePath)
+        if image_path.exists():
+            image_path.unlink()
+
+    # Удаляем историю из БД
+    db.query(History).filter(History.UserId == current_user.UserId).delete()
+
+    # Удаляем аккаунт
+    db.delete(current_user)
+    db.commit()
+
+    return {"message": "Account and history deleted"}
+
+
+# Predict (без изменений)
 @app.post('/predict')
 async def predict(
         image_id: Optional[str] = Query(None),
@@ -268,6 +390,6 @@ async def predict(
         traceback.print_exc()
         raise HTTPException(status_code=500, detail=str(e))
 
-app.mount("/uploads", StaticFiles(directory="uploads"), name="uploads")
+
 if __name__ == '__main__':
     uvicorn.run(app, host="0.0.0.0", port=3000, reload=True)
