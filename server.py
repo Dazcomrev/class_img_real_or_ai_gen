@@ -1,12 +1,12 @@
-from fastapi import FastAPI, File, UploadFile, HTTPException, Query, Depends, status, BackgroundTasks
+from fastapi import FastAPI, File, UploadFile, HTTPException, Query, Depends, status
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import HTMLResponse, FileResponse
+from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 from sqlalchemy import create_engine, Column, Integer, String, Boolean, Float, DateTime
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker, Session
-from sqlalchemy.sql import func, delete
+from sqlalchemy.sql import func
 from pydantic import BaseModel
 from passlib.context import CryptContext
 from jose import JWTError, jwt
@@ -25,16 +25,14 @@ import threading
 import time
 from datetime import datetime, timedelta, timezone
 
+
+# Фоновая очистка истории
 def cleanup_old_history():
     while True:
         try:
             with SessionLocal() as db:
-                cutoff = datetime.now(timezone.utc) - timedelta(days=30)#minutes=2
-                old_items = (
-                    db.query(History)
-                    .filter(History.TimeStamp < cutoff)
-                    .all()
-                )
+                cutoff = datetime.now(timezone.utc) - timedelta(days=30)
+                old_items = db.query(History).filter(History.TimeStamp < cutoff).all()
 
                 deleted_count = 0
                 for item in old_items:
@@ -47,15 +45,10 @@ def cleanup_old_history():
                 if deleted_count > 0:
                     db.commit()
                     print(f"Cleared {deleted_count} old items")
-
         except Exception as e:
             print(f"Cleanup error: {e}")
-
         time.sleep(60 * 60)  # раз в час
 
-# Запуск фонового таймера
-cleanup_thread = threading.Thread(target=cleanup_old_history, daemon=True)
-cleanup_thread.start()
 
 # Настройки БД
 DATABASE_URL = "postgresql://postgres:123456@localhost/ClassImgRealOrGenAI"
@@ -79,16 +72,14 @@ SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 Base = declarative_base()
 
 
-# Модели БД
+# Модели БД (оптимизированные)
 class User(Base):
     __tablename__ = 'User'
     UserId = Column(Integer, primary_key=True, index=True)
     Name = Column(String(100), nullable=False)
     Email = Column(String(255), unique=True, index=True, nullable=False)
     PasswordHash = Column(String(255), nullable=False)
-    EmailVerified = Column(Boolean, default=False)
     CreatedAt = Column(DateTime(timezone=True), server_default=func.now())
-    UpdatedAt = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
 
 
 class History(Base):
@@ -114,10 +105,15 @@ def get_db():
         db.close()
 
 
+# Запуск фоновой очистки
+cleanup_thread = threading.Thread(target=cleanup_old_history, daemon=True)
+cleanup_thread.start()
+
+# Security
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="token", auto_error=False)
 
-# Модель (без изменений)
+# Модель машинного обучения
 model_path = "best_resnet_last_two_layers_cpu.pkl"
 model = None
 transform = transforms.Compose([
@@ -140,7 +136,7 @@ UPLOAD_DIR = Path("uploads")
 UPLOAD_DIR.mkdir(exist_ok=True)
 
 
-# Pydantic
+# Pydantic модели
 class UserCreate(BaseModel):
     name: str
     email: str
@@ -162,7 +158,7 @@ class HistoryResponse(BaseModel):
     TimeStamp: datetime
 
 
-# JWT utils (без изменений)
+# JWT утилиты
 def verify_password(plain, hashed):
     return pwd_context.verify(plain, hashed)
 
@@ -195,6 +191,7 @@ app.mount("/static", StaticFiles(directory="static"), name="static")
 app.mount("/uploads", StaticFiles(directory="uploads"), name="uploads")
 
 
+# Эндпоинты
 @app.get("/")
 async def root():
     if os.path.exists("static/index.html"):
@@ -208,7 +205,6 @@ def status():
     return {"status": "Server OK", "model": model_status}
 
 
-# Регистрация (без изменений)
 @app.post('/register', status_code=201)
 def register(user_data: UserCreate, db: Session = Depends(get_db)):
     if db.query(User).filter(User.Email == user_data.email).first():
@@ -221,7 +217,6 @@ def register(user_data: UserCreate, db: Session = Depends(get_db)):
     return {"message": "Добавлен пользователь", "user_id": user.UserId}
 
 
-# Логин (без изменений)
 @app.post('/token', response_model=Token)
 def login(form_data: OAuth2PasswordRequestForm = Depends(), db: Session = Depends(get_db)):
     user = db.query(User).filter(User.Email == form_data.username).first()
@@ -230,8 +225,6 @@ def login(form_data: OAuth2PasswordRequestForm = Depends(), db: Session = Depend
     token = create_access_token({"sub": str(user.UserId)})
     return {"access_token": token, "token_type": "bearer"}
 
-
-# НОВЫЕ ЭНДПОИНТЫ
 
 @app.get('/history', response_model=list[HistoryResponse])
 def get_history(
@@ -249,7 +242,6 @@ def get_history(
     else:
         history = query.order_by(History.TimeStamp.desc()).all()
 
-    print(f"FOUND {len(history)} records for user {current_user.UserId}")
     return history
 
 
@@ -266,12 +258,10 @@ def delete_history(history_id: int, current_user=Depends(get_current_user), db: 
     if not history:
         raise HTTPException(404, "History item not found")
 
-    # Удаляем файл изображения
     image_path = Path(history.ImagePath)
     if image_path.exists():
         image_path.unlink()
 
-    # Удаляем запись из БД
     db.delete(history)
     db.commit()
 
@@ -283,12 +273,7 @@ def clear_history(current_user=Depends(get_current_user), db: Session = Depends(
     if not current_user:
         raise HTTPException(401, "Authorization required")
 
-    print(f"Current user ID: {current_user.UserId}")
-    print(f"History records for user {current_user.UserId}:")
-    q = db.query(History).filter(History.UserId == current_user.UserId)
-    print([h.HistoryId for h in q.all()])
-
-    user_history = q.all()
+    user_history = db.query(History).filter(History.UserId == current_user.UserId).all()
 
     for history in user_history:
         image_path = Path(history.ImagePath)
@@ -297,7 +282,6 @@ def clear_history(current_user=Depends(get_current_user), db: Session = Depends(
 
     deleted_count = db.query(History).filter(History.UserId == current_user.UserId).delete()
     db.commit()
-    print(f"Deleted {deleted_count} records")
 
     return {"message": "History cleared", "deleted_count": deleted_count}
 
@@ -307,76 +291,73 @@ def delete_account(current_user=Depends(get_current_user), db: Session = Depends
     if not current_user:
         raise HTTPException(401, "Authorization required")
 
-    # Удаляем историю и файлы
     user_history = db.query(History).filter(History.UserId == current_user.UserId).all()
     for history in user_history:
         image_path = Path(history.ImagePath)
         if image_path.exists():
             image_path.unlink()
 
-    # Удаляем историю из БД
     db.query(History).filter(History.UserId == current_user.UserId).delete()
-
-    # Удаляем аккаунт
     db.delete(current_user)
     db.commit()
 
     return {"message": "Account and history deleted"}
 
 
-# Predict (без изменений)
 @app.post('/predict')
 async def predict(
-        image_id: Optional[str] = Query(None),
         guest: bool = Query(False),
         file: UploadFile = File(...),
         current_user=Depends(get_current_user),
-        db: Session = Depends(get_db)):
+        db: Session = Depends(get_db)
+):
     if not model:
         raise HTTPException(500, "Model not loaded")
 
     if not file.content_type.startswith('image/'):
         raise HTTPException(400, "Images only")
 
+    # Генерация имени файла
     prefix = f"{current_user.UserId}_" if current_user else "guest_"
     filename = f"{prefix}{uuid.uuid4()}_{file.filename}"
     file_path = UPLOAD_DIR / filename
+
+    # Сохранение файла
     contents = await file.read()
     with open(file_path, "wb") as f:
         f.write(contents)
 
     try:
+        # Классификация изображения
         image = Image.open(file_path).convert('RGB')
         tensor = transform(image).unsqueeze(0)
 
         with torch.no_grad():
             outputs = model(tensor)
             probs = torch.nn.functional.softmax(outputs[0], dim=0)
-            conf, pred = torch.max(probs, 0)
-            result = pred.item()
+            confidence, prediction = torch.max(probs, 0)
+            result = prediction.item()
 
         result_text = "Реальное изображение" if result == 1 else "Изображение сгенерировано нейронной сетью"
 
+        # Сохранение в историю только для авторизованных пользователей (не гостей)
         if current_user and not guest:
-            print(f"SAVING to DB for user {current_user.UserId}")
             history = History(
                 UserId=current_user.UserId,
                 ImagePath=str(file_path),
                 Prediction=result,
-                Confidence=float(conf),
+                Confidence=float(confidence),
                 ProbReal=float(probs[1]),
                 ProbAI=float(probs[0])
             )
             db.add(history)
             db.commit()
-            db.refresh(history)
-            print(f"SAVED! HistoryId: {history.HistoryId}")
 
         return {
             "image_path": str(file_path),
             "result": result,
             "result_text": result_text,
-            "confidence": float(conf),
+            "confidence": float(confidence),
             "probabilities": {
                 "real": float(probs[1]),
                 "ai_generated": float(probs[0])
@@ -390,6 +371,46 @@ async def predict(
         traceback.print_exc()
         raise HTTPException(status_code=500, detail=str(e))
 
+
+class UserInfoResponse(BaseModel):
+    user_id: int
+    name: str
+    email: str
+
+
+class ChangeNameRequest(BaseModel):
+    name: str
+
+
+@app.get('/user/info', response_model=UserInfoResponse)
+def get_user_info(current_user=Depends(get_current_user)):
+    if not current_user:
+        raise HTTPException(401, "Authorization required")
+
+    return {
+        "user_id": current_user.UserId,
+        "name": current_user.Name,
+        "email": current_user.Email
+    }
+
+
+@app.put('/user/change-name')
+def change_user_name(
+        request: ChangeNameRequest,
+        current_user=Depends(get_current_user),
+        db: Session = Depends(get_db)
+):
+    if not current_user:
+        raise HTTPException(401, "Authorization required")
+
+    if not request.name or len(request.name.strip()) < 2:
+        raise HTTPException(400, "Name must be at least 2 characters long")
+
+    current_user.Name = request.name.strip()
+    db.commit()
+    db.refresh(current_user)
+
+    return {"message": "Name updated successfully", "name": current_user.Name}
 
 if __name__ == '__main__':
     uvicorn.run(app, host="0.0.0.0", port=3000, reload=True)
