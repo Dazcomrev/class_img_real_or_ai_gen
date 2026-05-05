@@ -43,12 +43,105 @@
                         <p id="user-name" class="text-xl font-bold text-gray-800"></p>
                     </div>
                 </div>
-                <button id="edit-name-btn" class="px-4 py-2 bg-green-500 text-white rounded-xl font-semibold hover:bg-green-600 flex items-center gap-2">
-                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z"></path>
-                    </svg>
-                    Изменить имя
-                </button>
+                <div class="flex gap-2">
+                    <button id="show-stats-btn" class="px-4 py-2 bg-purple-500 text-white rounded-xl font-semibold hover:bg-purple-600 flex items-center gap-2">
+                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"></path>
+                        </svg>
+                        Статистика
+                    </button>
+                    <button id="edit-name-btn" class="px-4 py-2 bg-green-500 text-white rounded-xl font-semibold hover:bg-green-600 flex items-center gap-2">
+                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z"></path>
+                        </svg>
+                        Изменить имя
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Расширенная статистика пользователя -->
+        <div id="feedback-section" class="bg-white rounded-2xl shadow-2xl p-8 mb-8 hidden">
+            <h2 class="text-3xl font-bold text-gray-800 mb-6">Моя статистика</h2>
+
+            <!-- Общая статистика проверок -->
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
+                <div class="bg-gradient-to-r from-blue-500 to-blue-600 rounded-xl p-4 text-white text-center">
+                    <div class="text-3xl font-bold" id="total-checks">0</div>
+                    <div class="text-sm">Всего проверок</div>
+                </div>
+                <div class="bg-gradient-to-r from-green-500 to-green-600 rounded-xl p-4 text-white text-center">
+                    <div class="text-3xl font-bold" id="real-count">0</div>
+                    <div class="text-sm">Реальных фото</div>
+                    <div class="text-xs" id="real-percent">0%</div>
+                </div>
+                <div class="bg-gradient-to-r from-red-500 to-red-600 rounded-xl p-4 text-white text-center">
+                    <div class="text-3xl font-bold" id="ai-count">0</div>
+                    <div class="text-sm">AI-изображений</div>
+                    <div class="text-xs" id="ai-percent">0%</div>
+                </div>
+            </div>
+
+            <!-- Уверенность модели -->
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-8">
+                <div class="bg-gradient-to-r from-emerald-500 to-emerald-600 rounded-xl p-4 text-white text-center">
+                    <div class="text-2xl font-bold" id="avg-conf-real">0%</div>
+                    <div class="text-sm">Средняя уверенность в Real</div>
+                </div>
+                <div class="bg-gradient-to-r from-orange-500 to-orange-600 rounded-xl p-4 text-white text-center">
+                    <div class="text-2xl font-bold" id="avg-conf-ai">0%</div>
+                    <div class="text-sm">Средняя уверенность в AI</div>
+                </div>
+            </div>
+
+            <!-- Точность модели на основе обратной связи -->
+            <div class="bg-gradient-to-r from-purple-500 to-purple-600 rounded-xl p-4 text-white text-center mb-8">
+                <div class="text-4xl font-bold" id="model-accuracy">0%</div>
+                <div class="text-sm">Точность модели (по вашим оценкам)</div>
+                <div class="text-xs mt-2">Всего оценок: <span id="total-feedback">0</span></div>
+            </div>
+
+            <!-- Детали обратной связи -->
+            <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
+                <div class="bg-green-100 rounded-xl p-3 text-center">
+                    <div class="text-2xl font-bold text-green-600" id="true-real-count">0</div>
+                    <div class="text-xs text-gray-600">Верно определил Real</div>
+                </div>
+                <div class="bg-emerald-100 rounded-xl p-3 text-center">
+                    <div class="text-2xl font-bold text-emerald-600" id="true-ai-count">0</div>
+                    <div class="text-xs text-gray-600">Верно определил AI</div>
+                </div>
+                <div class="bg-orange-100 rounded-xl p-3 text-center">
+                    <div class="text-2xl font-bold text-orange-600" id="false-real-count">0</div>
+                    <div class="text-xs text-gray-600">Ошибка: Real вместо AI</div>
+                </div>
+                <div class="bg-red-100 rounded-xl p-3 text-center">
+                    <div class="text-2xl font-bold text-red-600" id="false-ai-count">0</div>
+                    <div class="text-xs text-gray-600">Ошибка: AI вместо Real</div>
+                </div>
+            </div>
+
+            <!-- Избранное и качество -->
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-8">
+                <div class="bg-yellow-100 rounded-xl p-4 text-center">
+                    <div class="text-2xl font-bold text-yellow-600" id="favorites-count">0</div>
+                    <div class="text-sm text-gray-600">В избранном</div>
+                </div>
+                <div class="bg-indigo-100 rounded-xl p-4 text-center">
+                    <div class="text-2xl font-bold text-indigo-600" id="quality-score">0</div>
+                    <div class="text-sm text-gray-600">Рейтинг качества</div>
+                    <div class="text-xs text-gray-500">(на основе обратной связи)</div>
+                </div>
+            </div>
+
+            <!-- График активности -->
+            <div class="mb-8">
+                <canvas id="activity-chart" width="400" height="200" style="max-height: 300px;"></canvas>
+            </div>
+
+            <!-- Распределение уверенности -->
+            <div>
+                <canvas id="confidence-chart" width="400" height="200" style="max-height: 300px;"></canvas>
             </div>
         </div>
 
@@ -65,12 +158,19 @@
         </div>
 
         <!-- Auth Panel (скрыт по умолчанию) -->
-        <div id="auth-panel" class="bg-white rounded-2xl shadow-2xl p-8 mb-8 mx-auto max-w-md hidden">
+        <div id="auth-panel" class="bg-white rounded-2xl shadow-2xl p-8 mb-8 mx-auto max-w-md hidden relative">
+            <button id="close-auth-btn" class="absolute top-4 right-4 text-gray-400 hover:text-gray-600 transition-colors">
+                <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+                </svg>
+            </button>
+
             <div class="flex justify-center mb-6">
                 <button id="login-tab" class="tab-btn px-8 py-3 bg-blue-500 text-white rounded-xl font-semibold mr-2 active">Войти</button>
                 <button id="register-tab" class="tab-btn px-8 py-3 bg-gray-200 text-gray-700 rounded-xl font-semibold">Регистрация</button>
             </div>
 
+            <!-- ... остальные формы авторизации остаются без изменений ... -->
             <form id="login-form" class="space-y-4">
                 <input type="email" id="login-email" placeholder="Email" class="w-full p-4 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500" required>
                 <input type="password" id="login-password" maxlength="72" placeholder="Пароль" class="w-full p-4 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500" required>
@@ -123,10 +223,17 @@
             </div>
         </div>
 
-        <!-- History Section -->
+        <!-- History and Favorites Section -->
         <div id="history-section" class="bg-white rounded-2xl shadow-2xl p-8 hidden">
             <div class="flex flex-col lg:flex-row justify-between items-start lg:items-center mb-8 gap-4">
-                <h2 class="text-3xl font-bold text-gray-800">Ваша история проверок</h2>
+                <div class="flex gap-4">
+                    <button id="history-tab" class="tab-btn2 px-6 py-2 bg-blue-500 text-white rounded-xl font-semibold hover:bg-blue-600">
+                        История
+                    </button>
+                    <button id="favorites-tab" class="tab-btn2 px-6 py-2 bg-gray-200 text-gray-700 rounded-xl font-semibold hover:bg-gray-300">
+                        Избранное
+                    </button>
+                </div>
                 <div class="flex flex-col sm:flex-row gap-2 w-full lg:w-auto">
                     <select id="sort-select" class="px-4 py-2 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500">
                         <option value="desc">Сначала новые</option>
@@ -153,12 +260,43 @@
                 </div>
             </div>
         </div>
+
+        <!-- Модальное окно для обратной связи -->
+        <div id="feedback-modal" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 hidden">
+            <div class="bg-white rounded-2xl p-8 max-w-md w-full mx-4">
+                <h3 class="text-2xl font-bold mb-4">Обратная связь</h3>
+                <p class="text-gray-600 mb-4" id="feedback-question">Помогите улучшить модель! Правильно ли определила нейросеть?</p>
+                <div class="flex gap-3 mb-4">
+                    <button id="feedback-correct-btn" class="flex-1 bg-green-500 text-white py-3 rounded-xl font-semibold hover:bg-green-600">
+                        Да, верно
+                    </button>
+                    <button id="feedback-incorrect-btn" class="flex-1 bg-red-500 text-white py-3 rounded-xl font-semibold hover:bg-red-600">
+                        Нет, ошиблась
+                    </button>
+                </div>
+                <div id="feedback-correction-options" class="hidden space-y-3">
+                    <p class="text-gray-700 font-semibold">Что на самом деле на изображении?</p>
+                    <button id="feedback-is-real" class="w-full bg-green-500 text-white py-3 rounded-xl font-semibold hover:bg-green-600">
+                        Реальное изображение
+                    </button>
+                    <button id="feedback-is-ai" class="w-full bg-red-500 text-white py-3 rounded-xl font-semibold hover:bg-red-600">
+                        Сгенерировано AI
+                    </button>
+                </div>
+                <button id="close-feedback-modal" class="w-full mt-4 bg-gray-300 text-gray-700 py-3 rounded-xl font-semibold hover:bg-gray-400">
+                    Отмена
+                </button>
+            </div>
+        </div>
     </div>
 
     <script>
         let token = localStorage.getItem('token');
         let isAuthenticated = false;
         let currentSort = 'desc';
+        let currentView = 'history'; // 'history' or 'favorites'
+        let currentFeedbackHistoryId = null;
+        let currentFeedbackPrediction = null;
 
         // Инициализация после загрузки DOM
         document.addEventListener('DOMContentLoaded', function() {
@@ -186,11 +324,45 @@
                 };
             }
 
-            // Вкладки
+            // Кнопка закрытия окна авторизации
+            const closeAuthBtn = document.getElementById('close-auth-btn');
+            if (closeAuthBtn) {
+                closeAuthBtn.onclick = () => {
+                    document.getElementById('auth-panel').classList.add('hidden');
+                };
+            }
+
+            // Вкладки авторизации
             const loginTab = document.getElementById('login-tab');
             const registerTab = document.getElementById('register-tab');
             if (loginTab) loginTab.onclick = () => switchTab('login');
             if (registerTab) registerTab.onclick = () => switchTab('register');
+
+            // Вкладки истории/избранного
+            const historyTab = document.getElementById('history-tab');
+            const favoritesTab = document.getElementById('favorites-tab');
+
+            if (historyTab) {
+                historyTab.onclick = () => {
+                    currentView = 'history';
+                    historyTab.classList.remove('bg-gray-200', 'text-gray-700');
+                    historyTab.classList.add('bg-blue-500', 'text-white');
+                    favoritesTab.classList.remove('bg-blue-500', 'text-white');
+                    favoritesTab.classList.add('bg-gray-200', 'text-gray-700');
+                    loadHistory(currentSort);
+                };
+            }
+
+            if (favoritesTab) {
+                favoritesTab.onclick = () => {
+                    currentView = 'favorites';
+                    favoritesTab.classList.remove('bg-gray-200', 'text-gray-700');
+                    favoritesTab.classList.add('bg-blue-500', 'text-white');
+                    historyTab.classList.remove('bg-blue-500', 'text-white');
+                    historyTab.classList.add('bg-gray-200', 'text-gray-700');
+                    loadFavorites();
+                };
+            }
 
             // Регистрация
             const regForm = document.getElementById('register-form');
@@ -247,7 +419,6 @@
                             localStorage.setItem('token', token);
                             await checkAuth();
                             document.getElementById('auth-panel').classList.add('hidden');
-                            // Очистка формы
                             loginForm.reset();
                         } else {
                             const error = await response.json();
@@ -264,12 +435,20 @@
 
             // History события
             const refreshBtn = document.getElementById('refresh-history');
-            if (refreshBtn) refreshBtn.addEventListener('click', () => loadHistory(currentSort));
+            if (refreshBtn) refreshBtn.addEventListener('click', () => {
+                if (currentView === 'history') {
+                    loadHistory(currentSort);
+                } else {
+                    loadFavorites();
+                }
+            });
 
             const sortSelect = document.getElementById('sort-select');
             if (sortSelect) sortSelect.addEventListener('change', (e) => {
                 currentSort = e.target.value;
-                loadHistory(currentSort);
+                if (currentView === 'history') {
+                    loadHistory(currentSort);
+                }
             });
 
             // Logout
@@ -278,7 +457,7 @@
                 logoutBtn.onclick = logout;
             }
 
-            // Закрытие панели авторизации
+            // Закрытие панели авторизации при отправке форм
             document.querySelectorAll('form').forEach(form => {
                 form.addEventListener('submit', () => {
                     const authPanel = document.getElementById('auth-panel');
@@ -318,7 +497,6 @@
                 };
             }
 
-            // Закрытие модального окна при клике вне его
             if (editNameModal) {
                 editNameModal.onclick = (e) => {
                     if (e.target === editNameModal) {
@@ -331,6 +509,65 @@
             const closeResultBtn = document.getElementById('close-result-btn');
             if (closeResultBtn) {
                 closeResultBtn.onclick = closePredictionResult;
+            }
+
+            // Кнопка статистики
+            const showStatsBtn = document.getElementById('show-stats-btn');
+            if (showStatsBtn) {
+                showStatsBtn.onclick = () => {
+                    loadUserStats();
+                    const feedbackSection = document.getElementById('feedback-section');
+                    if (feedbackSection) {
+                        feedbackSection.classList.toggle('hidden');
+                    }
+                };
+            }
+
+            // Обработчики модального окна обратной связи
+            const feedbackCorrectBtn = document.getElementById('feedback-correct-btn');
+            const feedbackIncorrectBtn = document.getElementById('feedback-incorrect-btn');
+            const feedbackIsReal = document.getElementById('feedback-is-real');
+            const feedbackIsAi = document.getElementById('feedback-is-ai');
+            const closeFeedbackModal = document.getElementById('close-feedback-modal');
+
+            if (feedbackCorrectBtn) {
+                feedbackCorrectBtn.onclick = () => {
+                    if (currentFeedbackHistoryId) {
+                        submitFeedback(currentFeedbackHistoryId, true);
+                    }
+                };
+            }
+
+            if (feedbackIncorrectBtn) {
+                feedbackIncorrectBtn.onclick = () => {
+                    if (currentFeedbackHistoryId) {
+                        submitFeedback(currentFeedbackHistoryId, false);
+                    }
+                };
+            }
+
+            if (feedbackIsReal) {
+                feedbackIsReal.onclick = () => {
+                    if (currentFeedbackHistoryId) {
+                        submitFeedback(currentFeedbackHistoryId, false, 1);
+                    }
+                };
+            }
+
+            if (feedbackIsAi) {
+                feedbackIsAi.onclick = () => {
+                    if (currentFeedbackHistoryId) {
+                        submitFeedback(currentFeedbackHistoryId, false, 0);
+                    }
+                };
+            }
+
+            if (closeFeedbackModal) {
+                closeFeedbackModal.onclick = () => {
+                    document.getElementById('feedback-modal').classList.add('hidden');
+                    document.getElementById('feedback-correction-options').classList.add('hidden');
+                    currentFeedbackHistoryId = null;
+                };
             }
         }
 
@@ -360,13 +597,11 @@
                 if (response.ok) {
                     isAuthenticated = true;
                 } else {
-                    // Токен недействителен
                     localStorage.removeItem('token');
                     token = null;
                     isAuthenticated = false;
                 }
             } catch (error) {
-                // Ошибка сети или истекший токен
                 localStorage.removeItem('token');
                 token = null;
                 isAuthenticated = false;
@@ -374,7 +609,6 @@
             updateUI();
         }
 
-        // Обновите функцию updateUI
         function updateUI() {
             const uploadHint = document.getElementById('upload-hint');
             const historySection = document.getElementById('history-section');
@@ -395,10 +629,13 @@
                 if (isAuthenticated) {
                     historySection.classList.remove('hidden');
                     loadHistory();
-                    loadUserInfo(); // Загружаем информацию о пользователе
+                    loadUserInfo();
+                    loadUserStats();
                 } else {
                     historySection.classList.add('hidden');
                     if (userInfoPanel) userInfoPanel.classList.add('hidden');
+                    const feedbackSection = document.getElementById('feedback-section');
+                    if (feedbackSection) feedbackSection.classList.add('hidden');
                 }
             }
 
@@ -407,16 +644,14 @@
             if (deleteAccountBtn) deleteAccountBtn.classList.toggle('hidden', !isAuthenticated);
         }
 
-        // Обновите функцию logout
         function logout() {
             localStorage.removeItem('token');
             token = null;
             isAuthenticated = false;
             updateUI();
-            closePredictionResult(); // Закрываем результат при выходе
+            closePredictionResult();
         }
 
-        // Drag & Drop
         function setupDragAndDrop() {
             const dropZone = document.getElementById('drop-zone');
             const fileInput = document.getElementById('image-input');
@@ -460,85 +695,76 @@
         }
 
         async function uploadFile(file) {
-    if (file.size > 10 * 1024 * 1024) {
-        alert('Файл слишком большой (макс 10MB)');
-        return;
-    }
-
-    const formData = new FormData();
-    formData.append('file', file);
-
-    const dropZone = document.getElementById('drop-zone');
-    const originalDropZoneContent = `
-        <div id="drag-icon" class="mx-auto w-20 h-20 bg-gradient-to-r from-blue-500 to-purple-500 rounded-2xl flex items-center justify-center mb-4">
-            <svg class="w-10 h-10 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"></path>
-            </svg>
-        </div>
-        <p class="text-lg font-semibold text-gray-700 mb-2">Перетащите изображение сюда или кликните</p>
-        <p class="text-sm text-gray-500">PNG, JPG до 10MB</p>
-        <input type="file" id="image-input" accept="image/*" class="hidden">
-    `;
-
-    // Показываем индикатор загрузки
-    dropZone.innerHTML = '<div class="text-center"><div class="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500 mx-auto mb-4"></div><p class="text-lg font-semibold text-gray-700">Анализируем изображение...</p></div>';
-
-    try {
-        const headers = isAuthenticated ? { 'Authorization': `Bearer ${token}` } : {};
-        const url = isAuthenticated ? '/predict' : '/predict?guest=true';
-
-        const response = await fetch(url, {
-            method: 'POST',
-            headers,
-            body: formData
-        });
-
-        if (!response.ok) {
-            throw new Error(await response.text());
-        }
-
-        const result = await response.json();
-
-        // Восстанавливаем исходный контент drop-zone
-        dropZone.innerHTML = originalDropZoneContent;
-
-        // Перепривязываем события к новому input
-        const newFileInput = document.getElementById('image-input');
-        if (newFileInput) {
-            newFileInput.onchange = () => {
-                if (newFileInput.files[0]) uploadFile(newFileInput.files[0]);
-            };
-        }
-
-        showPrediction(result);
-        if (isAuthenticated) loadHistory();
-
-    } catch (error) {
-        // В случае ошибки тоже восстанавливаем контент
-        dropZone.innerHTML = originalDropZoneContent;
-
-        // Перепривязываем события
-        const newFileInput = document.getElementById('image-input');
-        if (newFileInput) {
-            newFileInput.onchange = () => {
-                if (newFileInput.files[0]) uploadFile(newFileInput.files[0]);
-            };
-        }
-
-        // Показываем сообщение об ошибке
-        const errorDiv = document.createElement('div');
-        errorDiv.className = 'mt-4 p-4 bg-red-100 text-red-700 rounded-xl text-center';
-        errorDiv.innerHTML = `<p class="font-semibold">Ошибка анализа: ${error.message}</p><button onclick="location.reload()" class="mt-2 px-4 py-2 bg-red-600 text-white rounded-lg text-sm">Попробовать снова</button>`;
-        dropZone.appendChild(errorDiv);
-
-        // Автоматически скрываем ошибку через 5 секунд
-        setTimeout(() => {
-            if (errorDiv.parentNode) {
-                errorDiv.remove();
+            if (file.size > 10 * 1024 * 1024) {
+                alert('Файл слишком большой (макс 10MB)');
+                return;
             }
-        }, 5000);
-    }
-}
+
+            const formData = new FormData();
+            formData.append('file', file);
+
+            const dropZone = document.getElementById('drop-zone');
+            const originalDropZoneContent = `
+                <div id="drag-icon" class="mx-auto w-20 h-20 bg-gradient-to-r from-blue-500 to-purple-500 rounded-2xl flex items-center justify-center mb-4">
+                    <svg class="w-10 h-10 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"></path>
+                    </svg>
+                </div>
+                <p class="text-lg font-semibold text-gray-700 mb-2">Перетащите изображение сюда или кликните</p>
+                <p class="text-sm text-gray-500">PNG, JPG до 10MB</p>
+                <input type="file" id="image-input" accept="image/*" class="hidden">
+            `;
+
+            dropZone.innerHTML = '<div class="text-center"><div class="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500 mx-auto mb-4"></div><p class="text-lg font-semibold text-gray-700">Анализируем изображение...</p></div>';
+
+            try {
+                const headers = isAuthenticated ? { 'Authorization': `Bearer ${token}` } : {};
+                const url = isAuthenticated ? '/predict' : '/predict?guest=true';
+
+                const response = await fetch(url, {
+                    method: 'POST',
+                    headers,
+                    body: formData
+                });
+
+                if (!response.ok) {
+                    throw new Error(await response.text());
+                }
+
+                const result = await response.json();
+                dropZone.innerHTML = originalDropZoneContent;
+
+                const newFileInput = document.getElementById('image-input');
+                if (newFileInput) {
+                    newFileInput.onchange = () => {
+                        if (newFileInput.files[0]) uploadFile(newFileInput.files[0]);
+                    };
+                }
+
+                showPrediction(result);
+                if (isAuthenticated && currentView === 'history') loadHistory(currentSort);
+
+            } catch (error) {
+                dropZone.innerHTML = originalDropZoneContent;
+                const newFileInput = document.getElementById('image-input');
+                if (newFileInput) {
+                    newFileInput.onchange = () => {
+                        if (newFileInput.files[0]) uploadFile(newFileInput.files[0]);
+                    };
+                }
+
+                const errorDiv = document.createElement('div');
+                errorDiv.className = 'mt-4 p-4 bg-red-100 text-red-700 rounded-xl text-center';
+                errorDiv.innerHTML = `<p class="font-semibold">Ошибка анализа: ${error.message}</p><button onclick="location.reload()" class="mt-2 px-4 py-2 bg-red-600 text-white rounded-lg text-sm">Попробовать снова</button>`;
+                dropZone.appendChild(errorDiv);
+
+                setTimeout(() => {
+                    if (errorDiv.parentNode) {
+                        errorDiv.remove();
+                    }
+                }, 5000);
+            }
+        }
 
         function showPrediction(result) {
             const resultDiv = document.getElementById('prediction-result');
@@ -565,7 +791,6 @@
                 ? 'h-full bg-gradient-to-r from-green-400 to-green-600 rounded-full transition-all duration-1000 animate-pulse'
                 : 'h-full bg-gradient-to-r from-red-400 to-red-600 rounded-full transition-all duration-1000 animate-pulse';
 
-            // График
             const canvas = document.getElementById('prob-chart');
             if (canvas) {
                 canvas.width = 300;
@@ -603,14 +828,12 @@
             }
         }
 
-        // History functions
         async function loadHistory(sort = currentSort) {
             try {
                 const response = await fetch(`/history?sort=${sort}`, {
                     headers: { 'Authorization': `Bearer ${token}` }
                 });
                 const history = await response.json();
-                console.log('History from DB:', history);
                 displayHistory(history);
             } catch (error) {
                 console.error('Ошибка истории:', error);
@@ -630,8 +853,7 @@
                 <div class="flex items-start p-6 bg-gray-50 rounded-xl hover:bg-gray-100 transition-all group relative">
                     <div class="flex-shrink-0 mr-4">
                         <img src="${item.ImagePath}?t=${Date.now()}" alt="История" class="w-20 h-20 object-cover rounded-lg shadow-md hover:scale-105 transition-transform">
-                        <a href="${item.ImagePath}" download class="block mt-2 w-20 h-6 bg-blue-500 text-white text-xs text-center rounded-lg font-semibold hover:bg-blue-600 transition-colors flex items-center justify-center"
-                           title="Скачать изображение">
+                        <a href="${item.ImagePath}" download class="block mt-2 w-20 h-6 bg-blue-500 text-white text-xs text-center rounded-lg font-semibold hover:bg-blue-600 transition-colors flex items-center justify-center">
                             Скачать
                         </a>
                     </div>
@@ -644,26 +866,101 @@
                         </div>
                         <div class="text-2xl font-bold mb-2 ${item.Prediction === 1 ? 'text-green-600' : 'text-red-600'}">
                             ${item.Prediction === 1 ? 'Реальное изображение' : 'Сгенерировано AI'}
+                            <span class="text-sm ml-2 text-gray-500">(уверенность: ${Math.round(item.Confidence * 100)}%)</span>
                         </div>
                         <div class="flex flex-wrap items-center gap-4 text-sm text-gray-600">
                             <span class="px-3 py-1 bg-blue-100 text-blue-800 rounded-full">
-                                Уверенность: ${Math.round(item.Confidence * 100)}%
+                                Реальное: ${Math.round(item.ProbReal * 100)}%
                             </span>
-                            <span>Реальное: ${Math.round(item.ProbReal * 100)}%</span>
                             <span>AI: ${Math.round(item.ProbAI * 100)}%</span>
                         </div>
                     </div>
-                    <button onclick="deleteHistoryItem(${item.HistoryId})"
-                            class="absolute top-4 right-4 p-2 text-red-500 hover:text-red-700 hover:bg-red-100 rounded-full transition-all opacity-100 group-hover:opacity-100">
-                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path>
+                    <div class="flex gap-2 absolute top-4 right-4">
+                        <button onclick="showFeedbackModal(${item.HistoryId}, ${item.Prediction})"
+                                class="p-2 text-purple-500 hover:text-purple-700 hover:bg-purple-100 rounded-full transition-all"
+                                title="Обратная связь">
+                            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 8h10M7 12h4m1 8l-4-4H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-3l-4 4z"></path>
+                            </svg>
+                        </button>
+                        <button onclick="addToFavorites(${item.HistoryId})"
+                                class="p-2 text-yellow-500 hover:text-yellow-700 hover:bg-yellow-100 rounded-full transition-all"
+                                title="В избранное">
+                            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z"/>
+                            </svg>
+                        </button>
+                        <button onclick="deleteHistoryItem(${item.HistoryId})"
+                                class="p-2 text-red-500 hover:text-red-700 hover:bg-red-100 rounded-full transition-all">
+                            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/>
+                            </svg>
+                        </button>
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        async function loadFavorites() {
+            try {
+                const response = await fetch('/favorites', {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+                const favorites = await response.json();
+                displayFavorites(favorites);
+            } catch (error) {
+                console.error('Ошибка загрузки избранного:', error);
+            }
+        }
+
+        function displayFavorites(favorites) {
+            const container = document.getElementById('history-list');
+            if (!container) return;
+
+            if (!favorites || favorites.length === 0) {
+                container.innerHTML = '<div class="text-center py-12 text-gray-500 col-span-full">Нет избранных изображений</div>';
+                return;
+            }
+
+            container.innerHTML = favorites.map(fav => `
+                <div class="flex items-start p-6 bg-gray-50 rounded-xl hover:bg-gray-100 transition-all group relative">
+                    <div class="flex-shrink-0 mr-4">
+                        <img src="${fav.history_item.ImagePath}?t=${Date.now()}" alt="Избранное" class="w-20 h-20 object-cover rounded-lg shadow-md hover:scale-105 transition-transform">
+                        <a href="${fav.history_item.ImagePath}" download class="block mt-2 w-20 h-6 bg-blue-500 text-white text-xs text-center rounded-lg font-semibold hover:bg-blue-600 transition-colors flex items-center justify-center">
+                            Скачать
+                        </a>
+                    </div>
+                    <div class="flex-1 min-w-0">
+                        <div class="font-semibold text-lg mb-1 truncate text-gray-900 group-hover:text-blue-600">
+                            Добавлено: ${new Date(fav.AddedAt).toLocaleString('ru-RU', {
+                                year: 'numeric', month: '2-digit', day: '2-digit',
+                                hour: '2-digit', minute: '2-digit'
+                            })}
+                        </div>
+                        <div class="text-sm text-gray-500 mb-2">
+                            Проверено: ${new Date(fav.history_item.TimeStamp).toLocaleString('ru-RU')}
+                        </div>
+                        <div class="text-2xl font-bold mb-2 ${fav.history_item.Prediction === 1 ? 'text-green-600' : 'text-red-600'}">
+                            ${fav.history_item.Prediction === 1 ? 'Реальное изображение' : 'Сгенерировано AI'}
+                        </div>
+                        <div class="flex flex-wrap items-center gap-4 text-sm text-gray-600">
+                            <span class="px-3 py-1 bg-blue-100 text-blue-800 rounded-full">
+                                Уверенность: ${Math.round(fav.history_item.Confidence * 100)}%
+                            </span>
+                            <span>Реальное: ${Math.round(fav.history_item.ProbReal * 100)}%</span>
+                            <span>AI: ${Math.round(fav.history_item.ProbAI * 100)}%</span>
+                        </div>
+                    </div>
+                    <button onclick="removeFromFavorites(${fav.history_id})"
+                            class="absolute top-4 right-4 p-2 text-red-500 hover:text-red-700 hover:bg-red-100 rounded-full transition-all">
+                        <svg class="w-5 h-5" fill="currentColor" viewBox="0 0 24 24">
+                            <path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/>
                         </svg>
                     </button>
                 </div>
             `).join('');
         }
 
-        // Delete functions
         window.deleteHistoryItem = async function(historyId) {
             if (!confirm('Удалить эту запись из истории? Изображение будет удалено навсегда.')) {
                 return;
@@ -676,9 +973,55 @@
                 });
 
                 if (response.ok) {
-                    loadHistory(currentSort);
+                    if (currentView === 'history') {
+                        loadHistory(currentSort);
+                    } else {
+                        loadFavorites();
+                    }
                 } else {
                     alert('Ошибка удаления');
+                }
+            } catch (error) {
+                alert('Ошибка сервера');
+            }
+        }
+
+        window.addToFavorites = async function(historyId) {
+            try {
+                const response = await fetch(`/favorites/${historyId}`, {
+                    method: 'POST',
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+
+                if (response.ok) {
+                    alert('Добавлено в избранное!');
+                    if (currentView === 'history') {
+                        loadHistory(currentSort);
+                    } else {
+                        loadFavorites();
+                    }
+                } else {
+                    const error = await response.json();
+                    alert('Ошибка: ' + error.detail);
+                }
+            } catch (error) {
+                alert('Ошибка сервера');
+            }
+        }
+
+        window.removeFromFavorites = async function(historyId) {
+            if (!confirm('Удалить из избранного?')) return;
+
+            try {
+                const response = await fetch(`/favorites/${historyId}`, {
+                    method: 'DELETE',
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+
+                if (response.ok) {
+                    loadFavorites();
+                } else {
+                    alert('Ошибка удаления из избранного');
                 }
             } catch (error) {
                 alert('Ошибка сервера');
@@ -697,7 +1040,11 @@
                 });
 
                 if (response.ok) {
-                    loadHistory(currentSort);
+                    if (currentView === 'history') {
+                        loadHistory(currentSort);
+                    } else {
+                        loadFavorites();
+                    }
                 } else {
                     alert('Ошибка очистки');
                 }
@@ -731,7 +1078,6 @@
             }
         }
 
-        // Получение информации о пользователе
         async function loadUserInfo() {
             if (!isAuthenticated || !token) return;
 
@@ -745,7 +1091,6 @@
                     document.getElementById('user-name').textContent = userInfo.name;
                     document.getElementById('user-info-panel').classList.remove('hidden');
                 } else if (response.status === 404) {
-                    // Эндпоинт еще не добавлен
                     console.log('User info endpoint not available yet');
                 } else {
                     throw new Error('Failed to load user info');
@@ -755,7 +1100,6 @@
             }
         }
 
-        // Изменение имени
         async function changeName(newName) {
             if (!newName || newName.trim().length < 2) {
                 alert('Имя должно содержать минимум 2 символа');
@@ -788,22 +1132,244 @@
             }
         }
 
-        // Закрытие результата анализа
         function closePredictionResult() {
             const predictionResult = document.getElementById('prediction-result');
             predictionResult.classList.add('hidden');
 
-            // Очищаем график
             if (window.probChart) {
                 window.probChart.destroy();
                 window.probChart = null;
             }
 
-            // Очищаем изображение
             const uploadedImage = document.getElementById('uploaded-image');
             if (uploadedImage) {
                 uploadedImage.src = '';
             }
+        }
+
+        async function submitFeedback(historyId, isCorrect, userCorrection = null) {
+            if (!userCorrection) {
+                if (!isCorrect) {
+                    currentFeedbackHistoryId = historyId;
+                    const modal = document.getElementById('feedback-modal');
+                    const correctionOptions = document.getElementById('feedback-correction-options');
+                    const question = document.getElementById('feedback-question');
+
+                    modal.classList.remove('hidden');
+                    question.textContent = 'Модель ошиблась. Что на самом деле на изображении?';
+                    correctionOptions.classList.remove('hidden');
+                    return;
+                } else {
+                    userCorrection = currentFeedbackPrediction;
+                }
+            }
+
+            try {
+                const response = await fetch('/feedback', {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Bearer ${token}`,
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        history_id: historyId,
+                        user_correction: userCorrection
+                    })
+                });
+
+                if (response.ok) {
+                    const result = await response.json();
+                    alert(`Спасибо за обратную связь! Тип: ${result.feedback_type}`);
+                    loadUserStats();
+                    if (currentView === 'history') {
+                        loadHistory(currentSort);
+                    }
+                } else {
+                    const error = await response.json();
+                    alert('Ошибка: ' + error.detail);
+                }
+            } catch (error) {
+                alert('Ошибка сервера: ' + error.message);
+            }
+
+            document.getElementById('feedback-modal').classList.add('hidden');
+            document.getElementById('feedback-correction-options').classList.add('hidden');
+            currentFeedbackHistoryId = null;
+        }
+
+        async function loadUserStats() {
+            if (!isAuthenticated) return;
+
+            try {
+                const response = await fetch('/stats/my', {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+
+                if (response.ok) {
+                    const stats = await response.json();
+
+                    // Обновляем основную статистику
+                    document.getElementById('total-checks').textContent = stats.total_checks;
+                    document.getElementById('real-count').textContent = stats.real_count;
+                    document.getElementById('ai-count').textContent = stats.ai_count;
+                    document.getElementById('real-percent').textContent = `${stats.real_percentage}%`;
+                    document.getElementById('ai-percent').textContent = `${stats.ai_percentage}%`;
+
+                    // Уверенность модели
+                    document.getElementById('avg-conf-real').textContent = `${stats.avg_confidence_real}%`;
+                    document.getElementById('avg-conf-ai').textContent = `${stats.avg_confidence_ai}%`;
+
+                    // Статистика обратной связи
+                    document.getElementById('total-feedback').textContent = stats.total_feedback;
+                    document.getElementById('true-real-count').textContent = stats.true_real;
+                    document.getElementById('true-ai-count').textContent = stats.true_ai;
+                    document.getElementById('false-real-count').textContent = stats.false_real;
+                    document.getElementById('false-ai-count').textContent = stats.false_ai;
+                    document.getElementById('model-accuracy').textContent = `${stats.model_accuracy}%`;
+
+                    // Избранное
+                    document.getElementById('favorites-count').textContent = stats.favorites_count;
+
+                    // Качество
+                    document.getElementById('quality-score').textContent = stats.quality_score;
+
+                    // Обновляем график активности, если он существует
+                    if (window.activityChart) {
+                        updateActivityChart(stats.daily_activity);
+                    } else {
+                        createActivityChart(stats.daily_activity);
+                    }
+
+                    // Обновляем распределение уверенности
+                    updateConfidenceDistribution(stats.confidence_distribution);
+                }
+            } catch (error) {
+                console.error('Error loading user stats:', error);
+            }
+        }
+
+        function createActivityChart(dailyActivity) {
+            const canvas = document.getElementById('activity-chart');
+            if (!canvas) return;
+
+            const ctx = canvas.getContext('2d');
+            const dates = dailyActivity.map(day => day.date.slice(5)); // Показываем месяц-день
+            const counts = dailyActivity.map(day => day.count);
+
+            window.activityChart = new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: dates,
+                    datasets: [{
+                        label: 'Проверок',
+                        data: counts,
+                        borderColor: 'rgb(59, 130, 246)',
+                        backgroundColor: 'rgba(59, 130, 246, 0.1)',
+                        tension: 0.4,
+                        fill: true
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: true,
+                    plugins: {
+                        legend: {
+                            position: 'top',
+                        },
+                        title: {
+                            display: true,
+                            text: 'Активность за последние 30 дней'
+                        }
+                    },
+                    scales: {
+                        y: {
+                            beginAtZero: true,
+                            ticks: { stepSize: 1 }
+                        }
+                    }
+                }
+            });
+        }
+
+        function updateActivityChart(dailyActivity) {
+            if (!window.activityChart) return;
+
+            const dates = dailyActivity.map(day => day.date.slice(5));
+            const counts = dailyActivity.map(day => day.count);
+
+            window.activityChart.data.labels = dates;
+            window.activityChart.data.datasets[0].data = counts;
+            window.activityChart.update();
+        }
+
+        function updateConfidenceDistribution(distribution) {
+            const ctx = document.getElementById('confidence-chart');
+            if (!ctx) return;
+
+            if (window.confidenceChart) {
+                window.confidenceChart.destroy();
+            }
+
+            window.confidenceChart = new Chart(ctx, {
+                type: 'bar',
+                data: {
+                    labels: ['<60%', '60-75%', '75-90%', '>90%'],
+                    datasets: [{
+                        label: 'Количество изображений',
+                        data: [
+                            distribution.very_low,
+                            distribution.low,
+                            distribution.medium,
+                            distribution.high
+                        ],
+                        backgroundColor: [
+                            'rgba(239, 68, 68, 0.7)',
+                            'rgba(245, 158, 11, 0.7)',
+                            'rgba(59, 130, 246, 0.7)',
+                            'rgba(16, 185, 129, 0.7)'
+                        ],
+                        borderColor: [
+                            'rgb(239, 68, 68)',
+                            'rgb(245, 158, 11)',
+                            'rgb(59, 130, 246)',
+                            'rgb(16, 185, 129)'
+                        ],
+                        borderWidth: 1
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: true,
+                    plugins: {
+                        legend: {
+                            display: false
+                        },
+                        title: {
+                            display: true,
+                            text: 'Распределение уверенности модели'
+                        }
+                    },
+                    scales: {
+                        y: {
+                            beginAtZero: true,
+                            ticks: { stepSize: 1 }
+                        }
+                    }
+                }
+            });
+        }
+
+        window.showFeedbackModal = function(historyId, prediction) {
+            currentFeedbackHistoryId = historyId;
+            currentFeedbackPrediction = prediction;
+
+            const modal = document.getElementById('feedback-modal');
+            const question = document.getElementById('feedback-question');
+            const correctionOptions = document.getElementById('feedback-correction-options');
+
+            question.textContent = 'Помогите улучшить модель! Правильно ли определила нейросеть?';
+            correctionOptions.classList.add('hidden');
+            modal.classList.remove('hidden');
         }
     </script>
 </body>
