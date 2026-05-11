@@ -3,10 +3,9 @@ from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
-from sqlalchemy import create_engine, Column, Integer, String, Boolean, Float, DateTime
+from sqlalchemy import create_engine, Column, Integer, String, Boolean, Float, DateTime, func
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker, Session
-from sqlalchemy.sql import func
 from pydantic import BaseModel
 from passlib.context import CryptContext
 from jose import JWTError, jwt
@@ -24,36 +23,6 @@ import uvicorn
 import threading
 import time
 from datetime import datetime, timedelta, timezone
-
-
-# Фоновая очистка истории
-def cleanup_old_history():
-    while True:
-        try:
-            with SessionLocal() as db:
-                cutoff = datetime.now(timezone.utc) - timedelta(days=30) # days=30  minutes=2
-
-                # Находим элементы для удаления, которые НЕ в избранном
-                old_items = db.query(History).filter(
-                    History.TimeStamp < cutoff,
-                    ~History.HistoryId.in_(db.query(Favorite.HistoryId))
-                ).all()
-
-                deleted_count = 0
-                for item in old_items:
-                    image_path = Path(item.ImagePath)
-                    if image_path.exists():
-                        image_path.unlink()
-                    db.delete(item)
-                    deleted_count += 1
-
-                if deleted_count > 0:
-                    db.commit()
-                    print(f"Cleared {deleted_count} old items (favorites preserved)")
-        except Exception as e:
-            print(f"Cleanup error: {e}")
-        time.sleep(60 * 60)  # раз в час 60 * 60
-
 
 # Настройки БД
 DATABASE_URL = "postgresql://postgres:123456@localhost/ClassImgRealOrGenAI"
@@ -77,7 +46,7 @@ SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 Base = declarative_base()
 
 
-# Модели БД (оптимизированные)
+# Модели БД (оптимизированные) - ОПРЕДЕЛЯЕМ ВСЕ МОДЕЛИ ДО ИХ ИСПОЛЬЗОВАНИЯ
 class User(Base):
     __tablename__ = 'User'
     UserId = Column(Integer, primary_key=True, index=True)
@@ -113,7 +82,145 @@ class History(Base):
     TimeStamp = Column(DateTime(timezone=True), server_default=func.now())
 
 
+class Favorite(Base):
+    __tablename__ = "Favorite"
+    FavoriteId = Column(Integer, primary_key=True, index=True)
+    UserId = Column(Integer, nullable=False)
+    HistoryId = Column(Integer, nullable=False, unique=True)
+    AddedAt = Column(DateTime(timezone=True), server_default=func.now())
+
+
+class Feedback(Base):
+    __tablename__ = "Feedback"
+    FeedbackId = Column(Integer, primary_key=True, index=True)
+    UserId = Column(Integer, nullable=False)
+    HistoryId = Column(Integer, nullable=False)
+    ImagePath = Column(String(500), nullable=False)
+    FeedbackImagePath = Column(String(500), nullable=True)
+    OriginalPrediction = Column(Integer, nullable=False)
+    OriginalProbReal = Column(Float, nullable=False)
+    OriginalProbAI = Column(Float, nullable=False)
+    UserCorrection = Column(Integer, nullable=False)
+    FeedbackType = Column(String(20), nullable=False)
+    CreatedAt = Column(DateTime(timezone=True), server_default=func.now())
+    IsReviewed = Column(Boolean, default=False)
+
+
+# Создаем таблицы
 Base.metadata.create_all(bind=engine)
+
+
+# Функция для обновления статистики пользователя (определяем ДО cleanup_old_history)
+def update_user_stats(user_id: int, db: Session):
+    """Пересчитывает и обновляет статистику пользователя"""
+    user = db.query(User).filter(User.UserId == user_id).first()
+    if not user:
+        return
+
+    # Общая статистика из истории
+    total_checks = db.query(History).filter(History.UserId == user_id).count()
+    total_real = db.query(History).filter(
+        History.UserId == user_id,
+        History.Prediction == 1
+    ).count()
+    total_ai = total_checks - total_real
+
+    # Статистика обратной связи
+    total_feedback = db.query(Feedback).filter(Feedback.UserId == user_id).count()
+    total_true_real = db.query(Feedback).filter(
+        Feedback.UserId == user_id,
+        Feedback.FeedbackType == "TrueReal"
+    ).count()
+    total_true_ai = db.query(Feedback).filter(
+        Feedback.UserId == user_id,
+        Feedback.FeedbackType == "TrueAI"
+    ).count()
+    total_false_real = db.query(Feedback).filter(
+        Feedback.UserId == user_id,
+        Feedback.FeedbackType == "FalseReal"
+    ).count()
+    total_false_ai = db.query(Feedback).filter(
+        Feedback.UserId == user_id,
+        Feedback.FeedbackType == "FalseAI"
+    ).count()
+
+    # Статистика избранного
+    total_favorites = db.query(Favorite).filter(Favorite.UserId == user_id).count()
+
+    # Последняя активность (исправляем проблему с timezone)
+    last_history = db.query(History.TimeStamp).filter(
+        History.UserId == user_id
+    ).order_by(History.TimeStamp.desc()).first()
+
+    last_feedback = db.query(Feedback.CreatedAt).filter(
+        Feedback.UserId == user_id
+    ).order_by(Feedback.CreatedAt.desc()).first()
+
+    # Исправляем сравнение datetime с timezone
+    min_datetime = datetime(1970, 1, 1, tzinfo=timezone.utc)
+
+    history_time = last_history[0] if last_history else min_datetime
+    feedback_time = last_feedback[0] if last_feedback else min_datetime
+
+    # Приводим оба datetime к timezone-aware
+    if history_time.tzinfo is None:
+        history_time = history_time.replace(tzinfo=timezone.utc)
+    if feedback_time.tzinfo is None:
+        feedback_time = feedback_time.replace(tzinfo=timezone.utc)
+
+    last_active = max(history_time, feedback_time)
+
+    # Точность модели
+    total_evaluated = total_true_real + total_true_ai + total_false_real + total_false_ai
+    accuracy = ((total_true_real + total_true_ai) / total_evaluated * 100) if total_evaluated > 0 else 0
+
+    # Рейтинг качества (чем больше обратной связи, тем выше)
+    quality = round((total_true_real + total_true_ai) * 10 / (total_checks + 1), 2)
+
+    # Обновляем пользователя
+    user.TotalChecks = total_checks
+    user.TotalRealChecks = total_real
+    user.TotalAIChecks = total_ai
+    user.TotalFeedback = total_feedback
+    user.TotalTrueReal = total_true_real
+    user.TotalTrueAI = total_true_ai
+    user.TotalFalseReal = total_false_real
+    user.TotalFalseAI = total_false_ai
+    user.TotalFavorites = total_favorites
+    user.LastActiveAt = last_active if last_active != min_datetime else None
+    user.AccuracyScore = round(accuracy, 2)
+    user.QualityScore = quality
+
+    db.commit()
+
+
+# Фоновая очистка истории (использует модель Favorite, которая уже определена)
+def cleanup_old_history():
+    while True:
+        try:
+            with SessionLocal() as db:
+                cutoff = datetime.now(timezone.utc) - timedelta(days=30)
+
+                # Находим элементы для удаления, которые НЕ в избранном
+                old_items = db.query(History).filter(
+                    History.TimeStamp < cutoff,
+                    ~History.HistoryId.in_(db.query(Favorite.HistoryId))
+                ).all()
+
+                deleted_count = 0
+                for item in old_items:
+                    image_path = Path(item.ImagePath)
+                    if image_path.exists():
+                        image_path.unlink()
+                    db.delete(item)
+                    deleted_count += 1
+
+                if deleted_count > 0:
+                    db.commit()
+                    print(f"Cleared {deleted_count} old items (favorites preserved)")
+        except Exception as e:
+            print(f"Cleanup error: {e}")
+        time.sleep(60 * 60)  # раз в час
 
 
 def get_db():
@@ -154,6 +261,13 @@ except Exception as e:
 UPLOAD_DIR = Path("uploads")
 UPLOAD_DIR.mkdir(exist_ok=True)
 
+# Создайте папки для обратной связи
+FEEDBACK_DIR = Path("feedback_images")
+FEEDBACK_REAL_DIR = FEEDBACK_DIR / "real"
+FEEDBACK_FAKE_DIR = FEEDBACK_DIR / "fake"
+FEEDBACK_REAL_DIR.mkdir(parents=True, exist_ok=True)
+FEEDBACK_FAKE_DIR.mkdir(parents=True, exist_ok=True)
+
 
 # Pydantic модели
 class UserCreate(BaseModel):
@@ -176,13 +290,6 @@ class HistoryResponse(BaseModel):
     ProbAI: float
     TimeStamp: datetime
 
-class Favorite(Base):
-    __tablename__ = "Favorite"
-    FavoriteId = Column(Integer, primary_key=True, index=True)
-    UserId = Column(Integer, nullable=False)
-    HistoryId = Column(Integer, nullable=False, unique=True)  # Один HistoryItem может быть только в одном избранном
-    AddedAt = Column(DateTime(timezone=True), server_default=func.now())
-
 
 class FavoriteResponse(BaseModel):
     FavoriteId: int
@@ -190,43 +297,21 @@ class FavoriteResponse(BaseModel):
     AddedAt: datetime
     history_item: HistoryResponse
 
-class Feedback(Base):
-    __tablename__ = "Feedback"
-    FeedbackId = Column(Integer, primary_key=True, index=True)
-    UserId = Column(Integer, nullable=False)
-    HistoryId = Column(Integer, nullable=False)
-    ImagePath = Column(String(500), nullable=False)
-    FeedbackImagePath = Column(String(500), nullable=True)  # Путь к копии в папке обратной связи
-    OriginalPrediction = Column(Integer, nullable=False)  # 0 или 1
-    OriginalProbReal = Column(Float, nullable=False)
-    OriginalProbAI = Column(Float, nullable=False)
-    UserCorrection = Column(Integer, nullable=False)  # 0 - AI, 1 - Real
-    FeedbackType = Column(String(20), nullable=False)  # 'TrueReal', 'TrueAI', 'FalseReal', 'FalseAI'
-    CreatedAt = Column(DateTime(timezone=True), server_default=func.now())
-    IsReviewed = Column(Boolean, default=False)  # Для возможного ревью администратором
 
-
-# Pydantic модели для обратной связи
 class FeedbackRequest(BaseModel):
     history_id: int
-    user_correction: int  # 0 - AI, 1 - Real
-
-
-class FeedbackResponse(BaseModel):
-    feedback_id: int
-    history_id: int
-    original_prediction: int
     user_correction: int
-    feedback_type: str
-    created_at: datetime
 
 
-# Создайте папки для обратной связи
-FEEDBACK_DIR = Path("feedback_images")
-FEEDBACK_REAL_DIR = FEEDBACK_DIR / "real"
-FEEDBACK_FAKE_DIR = FEEDBACK_DIR / "fake"
-FEEDBACK_REAL_DIR.mkdir(parents=True, exist_ok=True)
-FEEDBACK_FAKE_DIR.mkdir(parents=True, exist_ok=True)
+class UserInfoResponse(BaseModel):
+    user_id: int
+    name: str
+    email: str
+
+
+class ChangeNameRequest(BaseModel):
+    name: str
+
 
 # JWT утилиты
 def verify_password(plain, hashed):
@@ -254,83 +339,6 @@ async def get_current_user(token: str = Depends(oauth2_scheme), db: Session = De
         return user
     except JWTError:
         return None
-
-
-# Функция для обновления статистики пользователя
-def update_user_stats(user_id: int, db: Session):
-    """Пересчитывает и обновляет статистику пользователя"""
-
-    # Получаем пользователя
-    user = db.query(User).filter(User.UserId == user_id).first()
-    if not user:
-        return
-
-    # Общая статистика из истории
-    total_checks = db.query(History).filter(History.UserId == user_id).count()
-    total_real = db.query(History).filter(
-        History.UserId == user_id,
-        History.Prediction == 1
-    ).count()
-    total_ai = total_checks - total_real
-
-    # Статистика обратной связи
-    total_feedback = db.query(Feedback).filter(Feedback.UserId == user_id).count()
-    total_true_real = db.query(Feedback).filter(
-        Feedback.UserId == user_id,
-        Feedback.FeedbackType == "TrueReal"
-    ).count()
-    total_true_ai = db.query(Feedback).filter(
-        Feedback.UserId == user_id,
-        Feedback.FeedbackType == "TrueAI"
-    ).count()
-    total_false_real = db.query(Feedback).filter(
-        Feedback.UserId == user_id,
-        Feedback.FeedbackType == "FalseReal"
-    ).count()
-    total_false_ai = db.query(Feedback).filter(
-        Feedback.UserId == user_id,
-        Feedback.FeedbackType == "FalseAI"
-    ).count()
-
-    # Статистика избранного
-    total_favorites = db.query(Favorite).filter(Favorite.UserId == user_id).count()
-
-    # Последняя активность
-    last_history = db.query(History.TimeStamp).filter(
-        History.UserId == user_id
-    ).order_by(History.TimeStamp.desc()).first()
-
-    last_feedback = db.query(Feedback.CreatedAt).filter(
-        Feedback.UserId == user_id
-    ).order_by(Feedback.CreatedAt.desc()).first()
-
-    last_active = max(
-        last_history[0] if last_history else datetime.min,
-        last_feedback[0] if last_feedback else datetime.min
-    )
-
-    # Точность модели
-    total_evaluated = total_true_real + total_true_ai + total_false_real + total_false_ai
-    accuracy = ((total_true_real + total_true_ai) / total_evaluated * 100) if total_evaluated > 0 else 0
-
-    # Рейтинг качества (чем больше обратной связи, тем выше)
-    quality = round((total_true_real + total_true_ai) * 10 / (total_checks + 1), 2)
-
-    # Обновляем пользователя
-    user.TotalChecks = total_checks
-    user.TotalRealChecks = total_real
-    user.TotalAIChecks = total_ai
-    user.TotalFeedback = total_feedback
-    user.TotalTrueReal = total_true_real
-    user.TotalTrueAI = total_true_ai
-    user.TotalFalseReal = total_false_real
-    user.TotalFalseAI = total_false_ai
-    user.TotalFavorites = total_favorites
-    user.LastActiveAt = last_active if last_active != datetime.min else None
-    user.AccuracyScore = round(accuracy, 2)
-    user.QualityScore = quality
-
-    db.commit()
 
 
 # Static files
@@ -371,112 +379,6 @@ def login(form_data: OAuth2PasswordRequestForm = Depends(), db: Session = Depend
         raise HTTPException(401, "Invalid email/password")
     token = create_access_token({"sub": str(user.UserId)})
     return {"access_token": token, "token_type": "bearer"}
-
-
-@app.get('/history', response_model=list[HistoryResponse])
-def get_history(
-        sort: str = Query("desc", regex="^(asc|desc)$"),
-        current_user=Depends(get_current_user),
-        db: Session = Depends(get_db)
-):
-    if not current_user:
-        raise HTTPException(401, "Authorization required")
-
-    query = db.query(History).filter(History.UserId == current_user.UserId)
-
-    if sort == "asc":
-        history = query.order_by(History.TimeStamp.asc()).all()
-    else:
-        history = query.order_by(History.TimeStamp.desc()).all()
-
-    return history
-
-
-@app.delete('/history/one/{history_id}')
-def delete_history(history_id: int, current_user=Depends(get_current_user), db: Session = Depends(get_db)):
-    if not current_user:
-        raise HTTPException(401, "Authorization required")
-
-    history = db.query(History).filter(
-        History.HistoryId == history_id,
-        History.UserId == current_user.UserId
-    ).first()
-
-    if not history:
-        raise HTTPException(404, "History item not found")
-
-    image_path = Path(history.ImagePath)
-    if image_path.exists():
-        image_path.unlink()
-
-    db.delete(history)
-    db.commit()
-
-    return {"message": "History item deleted"}
-
-
-@app.delete('/history/all/clear')
-def clear_history(current_user=Depends(get_current_user), db: Session = Depends(get_db)):
-    if not current_user:
-        raise HTTPException(401, "Authorization required")
-
-    user_history = db.query(History).filter(History.UserId == current_user.UserId).all()
-
-    for history in user_history:
-        image_path = Path(history.ImagePath)
-        if image_path.exists():
-            image_path.unlink()
-
-    deleted_count = db.query(History).filter(History.UserId == current_user.UserId).delete()
-    db.commit()
-
-    return {"message": "History cleared", "deleted_count": deleted_count}
-
-
-'''@app.delete('/account')
-def delete_account(current_user=Depends(get_current_user), db: Session = Depends(get_db)):
-    if not current_user:
-        raise HTTPException(401, "Authorization required")
-
-    user_history = db.query(History).filter(History.UserId == current_user.UserId).all()
-    for history in user_history:
-        image_path = Path(history.ImagePath)
-        if image_path.exists():
-            image_path.unlink()
-
-    db.query(History).filter(History.UserId == current_user.UserId).delete()
-    db.delete(current_user)
-    db.commit()
-
-    return {"message": "Account and history deleted"}'''
-
-@app.delete('/account')
-def delete_account(current_user=Depends(get_current_user), db: Session = Depends(get_db)):
-    if not current_user:
-        raise HTTPException(401, "Authorization required")
-
-    # Удаляем файлы обратной связи
-    user_feedback = db.query(Feedback).filter(Feedback.UserId == current_user.UserId).all()
-    for feedback in user_feedback:
-        if feedback.FeedbackImagePath:
-            feedback_path = Path(feedback.FeedbackImagePath)
-            if feedback_path.exists():
-                feedback_path.unlink()
-
-    # Удаляем историю и файлы
-    user_history = db.query(History).filter(History.UserId == current_user.UserId).all()
-    for history in user_history:
-        image_path = Path(history.ImagePath)
-        if image_path.exists():
-            image_path.unlink()
-
-    # Удаляем записи из БД
-    db.query(Feedback).filter(Feedback.UserId == current_user.UserId).delete()
-    db.query(History).filter(History.UserId == current_user.UserId).delete()
-    db.delete(current_user)
-    db.commit()
-
-    return {"message": "Account and all data deleted"}
 
 
 @app.post('/predict')
@@ -544,14 +446,97 @@ async def predict(
         raise HTTPException(status_code=500, detail=str(e))
 
 
-class UserInfoResponse(BaseModel):
-    user_id: int
-    name: str
-    email: str
+@app.get('/history', response_model=list[HistoryResponse])
+def get_history(
+        sort: str = Query("desc", regex="^(asc|desc)$"),
+        current_user=Depends(get_current_user),
+        db: Session = Depends(get_db)
+):
+    if not current_user:
+        raise HTTPException(401, "Authorization required")
+
+    query = db.query(History).filter(History.UserId == current_user.UserId)
+
+    if sort == "asc":
+        history = query.order_by(History.TimeStamp.asc()).all()
+    else:
+        history = query.order_by(History.TimeStamp.desc()).all()
+
+    return history
 
 
-class ChangeNameRequest(BaseModel):
-    name: str
+@app.delete('/history/one/{history_id}')
+def delete_history(history_id: int, current_user=Depends(get_current_user), db: Session = Depends(get_db)):
+    if not current_user:
+        raise HTTPException(401, "Authorization required")
+
+    history = db.query(History).filter(
+        History.HistoryId == history_id,
+        History.UserId == current_user.UserId
+    ).first()
+
+    if not history:
+        raise HTTPException(404, "History item not found")
+
+    image_path = Path(history.ImagePath)
+    if image_path.exists():
+        image_path.unlink()
+
+    db.delete(history)
+    db.commit()
+
+    # Обновляем статистику пользователя
+    update_user_stats(current_user.UserId, db)
+
+    return {"message": "History item deleted"}
+
+
+@app.delete('/history/all/clear')
+def clear_history(current_user=Depends(get_current_user), db: Session = Depends(get_db)):
+    if not current_user:
+        raise HTTPException(401, "Authorization required")
+
+    user_history = db.query(History).filter(History.UserId == current_user.UserId).all()
+
+    for history in user_history:
+        image_path = Path(history.ImagePath)
+        if image_path.exists():
+            image_path.unlink()
+
+    deleted_count = db.query(History).filter(History.UserId == current_user.UserId).delete()
+    db.commit()
+
+    # Обновляем статистику пользователя
+    update_user_stats(current_user.UserId, db)
+
+    return {"message": "History cleared", "deleted_count": deleted_count}
+
+
+@app.delete('/account')
+def delete_account(current_user=Depends(get_current_user), db: Session = Depends(get_db)):
+    if not current_user:
+        raise HTTPException(401, "Authorization required")
+
+    # Удаляем историю и файлы
+    user_history = db.query(History).filter(History.UserId == current_user.UserId).all()
+    for history in user_history:
+        image_path = Path(history.ImagePath)
+        if image_path.exists():
+            image_path.unlink()
+
+    # Удаляем записи из БД, НО НЕ УДАЛЯЕМ ФАЙЛЫ feedback_images
+    # Просто удаляем записи, файлы остаются для обучения модели
+    db.query(Favorite).filter(Favorite.UserId == current_user.UserId).delete()
+    db.query(History).filter(History.UserId == current_user.UserId).delete()
+
+    # Опционально: можно оставить Feedback для статистики, но без привязки к пользователю
+    # Либо удалить записи, но оставить файлы
+    db.query(Feedback).filter(Feedback.UserId == current_user.UserId).delete()
+
+    db.delete(current_user)
+    db.commit()
+
+    return {"message": "Account and all data deleted"}
 
 
 @app.get('/user/info', response_model=UserInfoResponse)
@@ -616,6 +601,7 @@ def add_to_favorites(
     )
     db.add(favorite)
     db.commit()
+    db.refresh(favorite)
 
     # Обновляем статистику пользователя
     update_user_stats(current_user.UserId, db)
@@ -664,10 +650,10 @@ def get_favorites(
     result = []
     for fav in favorites:
         history_item = db.query(History).filter(History.HistoryId == fav.HistoryId).first()
-        if history_item:  # Если история еще существует
+        if history_item:
             result.append({
                 "FavoriteId": fav.FavoriteId,
-                "HistoryId": fav.HistoryId,
+                "HistoryId": fav.HistoryId,  # Убедимся, что имя поля правильное
                 "AddedAt": fav.AddedAt,
                 "history_item": {
                     "HistoryId": history_item.HistoryId,
@@ -711,33 +697,38 @@ def submit_feedback(
     original_pred = history_item.Prediction
     user_correction = feedback_data.user_correction
 
+    # Определяем тип обратной связи
+    # user_correction уже приходит от клиента (0 - AI, 1 - Real)
     if original_pred == 1 and user_correction == 1:
         feedback_type = "TrueReal"
     elif original_pred == 0 and user_correction == 0:
         feedback_type = "TrueAI"
     elif original_pred == 1 and user_correction == 0:
         feedback_type = "FalseReal"
-    else:
+    else:  # original_pred == 0 and user_correction == 1
         feedback_type = "FalseAI"
 
     original_path = Path(history_item.ImagePath)
     feedback_image_path = None
 
+    # Сохраняем копию изображения в соответствующую папку (ВСЕГДА сохраняем, даже если пользователь удалит аккаунт)
     if original_path.exists():
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
         user_prefix = f"user_{current_user.UserId}"
         original_filename = original_path.name
         new_filename = f"{timestamp}_{user_prefix}_{original_filename}"
 
-        if user_correction == 1:
+        # Сохраняем в папку в зависимости от того, что пользователь указал как правильный ответ
+        if user_correction == 1:  # Пользователь считает, что реальное
             dest_dir = FEEDBACK_REAL_DIR
-        else:
+        else:  # Пользователь считает, что AI
             dest_dir = FEEDBACK_FAKE_DIR
 
         dest_path = dest_dir / new_filename
         shutil.copy2(original_path, dest_path)
         feedback_image_path = str(dest_path)
 
+    # Сохраняем обратную связь
     feedback = Feedback(
         UserId=current_user.UserId,
         HistoryId=feedback_data.history_id,
@@ -752,6 +743,7 @@ def submit_feedback(
 
     db.add(feedback)
     db.commit()
+    db.refresh(feedback)
 
     # Обновляем статистику пользователя
     update_user_stats(current_user.UserId, db)
@@ -798,8 +790,6 @@ def get_my_stats(
     if not current_user:
         raise HTTPException(401, "Authorization required")
 
-    # Используем данные из таблицы User (быстро)
-    # Но для графиков активности все равно нужны данные из истории
     thirty_days_ago = datetime.now(timezone.utc) - timedelta(days=30)
     daily_activity = db.query(
         func.date(History.TimeStamp).label('date'),
@@ -811,7 +801,6 @@ def get_my_stats(
 
     daily_checks = [{"date": str(day.date), "count": day.count} for day in daily_activity]
 
-    # Распределение уверенности
     confidence_distribution = {
         "very_low": db.query(History).filter(
             History.UserId == current_user.UserId,
@@ -834,7 +823,6 @@ def get_my_stats(
     }
 
     return {
-        # Данные из кэша пользователя
         "total_checks": current_user.TotalChecks,
         "real_count": current_user.TotalRealChecks,
         "ai_count": current_user.TotalAIChecks,
@@ -842,27 +830,17 @@ def get_my_stats(
                                  2) if current_user.TotalChecks > 0 else 0,
         "ai_percentage": round(current_user.TotalAIChecks / current_user.TotalChecks * 100,
                                2) if current_user.TotalChecks > 0 else 0,
-
-        # Статистика обратной связи
         "total_feedback": current_user.TotalFeedback,
         "true_real": current_user.TotalTrueReal,
         "true_ai": current_user.TotalTrueAI,
         "false_real": current_user.TotalFalseReal,
         "false_ai": current_user.TotalFalseAI,
         "model_accuracy": current_user.AccuracyScore,
-
-        # Избранное
         "favorites_count": current_user.TotalFavorites,
-
-        # Дополнительная статистика
         "quality_score": current_user.QualityScore,
         "last_active": current_user.LastActiveAt.isoformat() if current_user.LastActiveAt else None,
-
-        # Графики (требуют вычислений)
         "daily_activity": daily_checks,
         "confidence_distribution": confidence_distribution,
-
-        # Средняя уверенность (требует вычислений)
         "avg_confidence_real": round(db.query(func.avg(History.Confidence)).filter(
             History.UserId == current_user.UserId,
             History.Prediction == 1
@@ -874,16 +852,13 @@ def get_my_stats(
     }
 
 
-# Эндпоинт для получения топ-пользователей
 @app.get('/stats/leaderboard')
 def get_leaderboard(
         limit: int = Query(10, ge=1, le=50),
         db: Session = Depends(get_db)
 ):
-    """Топ пользователей по точности и активности"""
-
     top_by_accuracy = db.query(User).filter(
-        User.TotalFeedback >= 5  # Минимум 5 оценок
+        User.TotalFeedback >= 5
     ).order_by(User.AccuracyScore.desc()).limit(limit).all()
 
     top_by_activity = db.query(User).order_by(
@@ -907,6 +882,7 @@ def get_leaderboard(
             for user in top_by_activity
         ]
     }
+
 
 if __name__ == '__main__':
     uvicorn.run(app, host="0.0.0.0", port=3000, reload=True)

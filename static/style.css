@@ -1,0 +1,153 @@
+/* Общие стили */
+#prob-chart {
+    display: block;
+    margin-left: auto;
+    margin-right: auto;
+}
+
+canvas {
+    max-width: 100%;
+    height: auto;
+}
+
+.action-button {
+    transition: all 0.2s ease;
+}
+
+.action-button:hover {
+    transform: scale(1.1);
+}
+
+.download-btn {
+    transition: all 0.2s ease;
+}
+
+.download-btn:hover {
+    transform: translateX(-50%) scale(1.05);
+}
+
+/* Мобильная версия (только для экранов меньше 768px) */
+@media (max-width: 768px) {
+    /* Фикс для кольцевой диаграммы */
+    #prob-chart {
+        width: 250px !important;
+        height: 250px !important;
+        margin: 0 auto !important;
+    }
+
+    /* Адаптация карточек истории для мобильных - вертикальные иконки */
+    .history-card {
+        flex-direction: column !important;
+        align-items: center !important;
+        position: relative !important;
+        padding: 1rem !important;
+        padding-right: 3rem !important;
+        text-align: center !important;
+    }
+
+    /* Контейнер с изображением */
+    .history-card .image-container {
+        width: 100% !important;
+        margin: 0 0 1rem 0 !important;
+        display: flex !important;
+        justify-content: center !important;
+    }
+
+    .history-card .image-container img {
+        width: 120px !important;
+        height: 120px !important;
+    }
+
+    /* Кнопка скачивания */
+    .history-card .download-btn {
+        position: absolute !important;
+        bottom: -0.5rem !important;
+        left: 50% !important;
+        transform: translateX(-50%) !important;
+        padding: 0.25rem 0.75rem !important;
+        font-size: 0.7rem !important;
+        white-space: nowrap !important;
+    }
+
+    /* Контейнер с информацией */
+    .history-card .info-container {
+        width: 100% !important;
+        padding: 0 !important;
+        text-align: center !important;
+    }
+
+    /* Контейнер с иконками - вертикальное расположение */
+    .history-card .actions-container {
+        position: absolute !important;
+        top: 0.5rem !important;
+        right: 0.5rem !important;
+        display: flex !important;
+        flex-direction: column !important;
+        gap: 0.5rem !important;
+        background: rgba(255, 255, 255, 0.95) !important;
+        padding: 0.5rem !important;
+        border-radius: 1rem !important;
+        box-shadow: 0 2px 8px rgba(0,0,0,0.1) !important;
+    }
+
+    /* Текст предсказания */
+    .history-card .prediction-text {
+        font-size: 1.1rem !important;
+        text-align: center !important;
+        word-break: break-word !important;
+    }
+
+    /* Текст времени */
+    .history-card .timestamp-text {
+        font-size: 0.75rem !important;
+        text-align: center !important;
+    }
+
+    /* Бейджи с процентами */
+    .history-card .badges-container {
+        justify-content: center !important;
+        flex-wrap: wrap !important;
+    }
+
+    /* Статистика */
+    .stats-grid {
+        grid-template-columns: repeat(2, 1fr) !important;
+        gap: 0.75rem !important;
+    }
+
+    /* Отступы */
+    .container {
+        padding-left: 0.75rem !important;
+        padding-right: 0.75rem !important;
+    }
+
+    /* Заголовки */
+    h1 {
+        font-size: 1.75rem !important;
+    }
+
+    h2 {
+        font-size: 1.25rem !important;
+    }
+
+    /* Модальное окно */
+    #feedback-modal .bg-white {
+        margin: 1rem !important;
+        padding: 1.5rem !important;
+    }
+
+    #feedback-modal button {
+        padding: 0.75rem !important;
+    }
+}
+
+/* Планшеты (768px - 1024px) */
+@media (min-width: 769px) and (max-width: 1024px) {
+    .history-card .actions-container {
+        gap: 0.5rem !important;
+    }
+
+    .history-card .action-button {
+        padding: 0.5rem !important;
+    }
+}
