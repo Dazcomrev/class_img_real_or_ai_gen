@@ -23,6 +23,8 @@ import uvicorn
 import threading
 import time
 from datetime import datetime, timedelta, timezone
+import re
+import dns.resolver
 
 # Настройки БД
 DATABASE_URL = "postgresql://postgres:123456@localhost/ClassImgRealOrGenAI"
@@ -67,7 +69,6 @@ class User(Base):
     TotalFavorites = Column(Integer, default=0)
     LastActiveAt = Column(DateTime(timezone=True), nullable=True)
     AccuracyScore = Column(Float, default=0)
-    QualityScore = Column(Float, default=0)
 
 
 class History(Base):
@@ -103,7 +104,6 @@ class Feedback(Base):
     UserCorrection = Column(Integer, nullable=False)
     FeedbackType = Column(String(20), nullable=False)
     CreatedAt = Column(DateTime(timezone=True), server_default=func.now())
-    IsReviewed = Column(Boolean, default=False)
 
 
 # Создаем таблицы
@@ -174,9 +174,6 @@ def update_user_stats(user_id: int, db: Session):
     total_evaluated = total_true_real + total_true_ai + total_false_real + total_false_ai
     accuracy = ((total_true_real + total_true_ai) / total_evaluated * 100) if total_evaluated > 0 else 0
 
-    # Рейтинг качества (чем больше обратной связи, тем выше)
-    quality = round((total_true_real + total_true_ai) * 10 / (total_checks + 1), 2)
-
     # Обновляем пользователя
     user.TotalChecks = total_checks
     user.TotalRealChecks = total_real
@@ -189,7 +186,6 @@ def update_user_stats(user_id: int, db: Session):
     user.TotalFavorites = total_favorites
     user.LastActiveAt = last_active if last_active != min_datetime else None
     user.AccuracyScore = round(accuracy, 2)
-    user.QualityScore = quality
 
     db.commit()
 
@@ -240,7 +236,8 @@ pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="token", auto_error=False)
 
 # Модель машинного обучения
-model_path = "best_resnet_last_two_layers_cpu.pkl"
+#model_path = "best_resnet_last_two_layers_cpu.pkl"
+model_path = "absolute_finale.pkl"
 model = None
 transform = transforms.Compose([
     transforms.Resize((224, 224)),
@@ -340,6 +337,19 @@ async def get_current_user(token: str = Depends(oauth2_scheme), db: Session = De
     except JWTError:
         return None
 
+def validate_email(email: str) -> bool:
+    # Базовая проверка формата
+    pattern = r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$'
+    if not re.match(pattern, email):
+        return False
+
+    # Проверка MX-записи домена (опционально)
+    try:
+        domain = email.split('@')[1]
+        dns.resolver.resolve(domain, 'MX')
+        return True
+    except:
+        return False  # Домен не имеет MX записи
 
 # Static files
 app.mount("/static", StaticFiles(directory="static"), name="static")
@@ -356,12 +366,15 @@ async def root():
 
 @app.get('/status')
 def status():
-    model_status = "Загружена" if model else "Ошибка загрузки"
+    #model_status = "Загружена" if model else "Ошибка загрузки"
+    model_status = "Uploaded" if model else "Loading error"
     return {"status": "Server OK", "model": model_status}
 
 
 @app.post('/register', status_code=201)
 def register(user_data: UserCreate, db: Session = Depends(get_db)):
+    if not validate_email(user_data.email):
+        raise HTTPException(400, "Invalid email format or domain doesn't exist")
     if db.query(User).filter(User.Email == user_data.email).first():
         raise HTTPException(400, "Email already registered")
     hashed = get_password_hash(user_data.password)
@@ -369,7 +382,8 @@ def register(user_data: UserCreate, db: Session = Depends(get_db)):
     db.add(user)
     db.commit()
     db.refresh(user)
-    return {"message": "Добавлен пользователь", "user_id": user.UserId}
+    #return {"message": "Добавлен пользователь", "user_id": user.UserId}
+    return {"message": "User added", "user_id": user.UserId}
 
 
 @app.post('/token', response_model=Token)
@@ -394,8 +408,49 @@ async def predict(
     if not file.content_type.startswith('image/'):
         raise HTTPException(400, "Images only")
 
-    prefix = f"{current_user.UserId}_" if current_user else "guest_"
-    filename = f"{prefix}{uuid.uuid4()}_{file.filename}"
+    ALLOWED_EXTENSIONS = {'.jpg', '.jpeg', '.png', '.bmp', '.webp', '.tiff', '.ico'}
+    ALLOWED_MIMETYPES = {
+        'image/jpeg', 'image/png', 'image/bmp', 'image/webp',
+        'image/tiff', 'image/x-icon', 'image/vnd.microsoft.icon'
+    }
+
+    # Проверка
+    if file.content_type not in ALLOWED_MIMETYPES:
+        raise HTTPException(400, f"Unsupported image type. Supported: {', '.join(ALLOWED_MIMETYPES)}")
+
+    # Для гостей - не сохраняем файл, работаем в памяти
+    if guest or not current_user:
+        try:
+            contents = await file.read()
+            image = Image.open(io.BytesIO(contents)).convert('RGB')
+            tensor = transform(image).unsqueeze(0)
+
+            with torch.no_grad():
+                outputs = model(tensor)
+                probs = torch.nn.functional.softmax(outputs[0], dim=0)
+                #confidence, prediction = torch.max(probs, 0)
+                _, prediction = torch.max(probs, 0)
+                result = prediction.item()
+
+            confidence = abs(float(probs[1]) - float(probs[0]))
+
+            return {
+                "result": result,
+                "result_text": "Реальное изображение" if result == 1 else "Изображение сгенерировано нейронной сетью",
+                "confidence": confidence, #float(confidence)
+                "probabilities": {
+                    "real": float(probs[1]),
+                    "ai_generated": float(probs[0])
+                },
+                "guest_mode": True
+            }
+        except Exception as e:
+            import traceback
+            traceback.print_exc()
+            raise HTTPException(status_code=500, detail=str(e))
+
+    # Для авторизованных пользователей - сохраняем
+    filename = f"{current_user.UserId}_{uuid.uuid4()}_{file.filename}"
     file_path = UPLOAD_DIR / filename
 
     contents = await file.read()
@@ -409,33 +464,37 @@ async def predict(
         with torch.no_grad():
             outputs = model(tensor)
             probs = torch.nn.functional.softmax(outputs[0], dim=0)
-            confidence, prediction = torch.max(probs, 0)
+            #confidence, prediction = torch.max(probs, 0)
+            _, prediction = torch.max(probs, 0)
             result = prediction.item()
 
-        if current_user and not guest:
-            history = History(
-                UserId=current_user.UserId,
-                ImagePath=str(file_path),
-                Prediction=result,
-                Confidence=float(confidence),
-                ProbReal=float(probs[1]),
-                ProbAI=float(probs[0])
-            )
-            db.add(history)
-            db.commit()
+        confidence = abs(float(probs[1]) - float(probs[0]))
 
-            # Обновляем статистику пользователя
-            update_user_stats(current_user.UserId, db)
+        history = History(
+            UserId=current_user.UserId,
+            ImagePath=str(file_path),
+            Prediction=result,
+            Confidence=confidence,#float(confidence),
+            ProbReal=float(probs[1]),
+            ProbAI=float(probs[0])
+        )
+        db.add(history)
+        db.commit()
+
+        # Обновляем статистику пользователя
+        update_user_stats(current_user.UserId, db)
 
         return {
             "image_path": str(file_path),
             "result": result,
             "result_text": "Реальное изображение" if result == 1 else "Изображение сгенерировано нейронной сетью",
-            "confidence": float(confidence),
+            "confidence": confidence, #float(confidence)
             "probabilities": {
                 "real": float(probs[1]),
                 "ai_generated": float(probs[0])
-            }
+            },
+            "history_id": history.HistoryId,
+            "guest_mode": False
         }
 
     except Exception as e:
@@ -445,6 +504,12 @@ async def predict(
         traceback.print_exc()
         raise HTTPException(status_code=500, detail=str(e))
 
+
+'''def adjust_timestamp_to_30days_ago(timestamp: datetime) -> datetime:
+    """Сдвигает временную метку на 30 дней назад"""
+    if timestamp.tzinfo is None:
+        timestamp = timestamp.replace(tzinfo=timezone.utc)
+    return timestamp - timedelta(days=30)'''
 
 @app.get('/history', response_model=list[HistoryResponse])
 def get_history(
@@ -462,7 +527,22 @@ def get_history(
     else:
         history = query.order_by(History.TimeStamp.desc()).all()
 
-    return history
+    '''# Модифицируем каждый элемент истории
+    modified_history = []
+    for item in history:
+        # Создаем словарь с данными
+        item_dict = {
+            "HistoryId": item.HistoryId,
+            "ImagePath": item.ImagePath,
+            "Prediction": item.Prediction,
+            "Confidence": item.Confidence,
+            "ProbReal": item.ProbReal,
+            "ProbAI": item.ProbAI,
+            "TimeStamp": adjust_timestamp_to_30days_ago(item.TimeStamp)
+        }
+        modified_history.append(item_dict)'''
+
+    return history # modified_history #
 
 
 @app.delete('/history/one/{history_id}')
@@ -654,7 +734,7 @@ def get_favorites(
             result.append({
                 "FavoriteId": fav.FavoriteId,
                 "HistoryId": fav.HistoryId,  # Убедимся, что имя поля правильное
-                "AddedAt": fav.AddedAt,
+                "AddedAt": fav.AddedAt, #adjust_timestamp_to_30days_ago(fav.AddedAt), #
                 "history_item": {
                     "HistoryId": history_item.HistoryId,
                     "ImagePath": history_item.ImagePath,
@@ -662,7 +742,7 @@ def get_favorites(
                     "Confidence": history_item.Confidence,
                     "ProbReal": history_item.ProbReal,
                     "ProbAI": history_item.ProbAI,
-                    "TimeStamp": history_item.TimeStamp
+                    "TimeStamp": history_item.TimeStamp #adjust_timestamp_to_30days_ago(history_item.TimeStamp), #
                 }
             })
 
@@ -756,6 +836,17 @@ def submit_feedback(
 
 
 @app.get('/feedback/my')
+def get_my_feedbacks(current_user=Depends(get_current_user), db: Session = Depends(get_db)):
+    if not current_user:
+        raise HTTPException(401, "Authorization required")
+
+    feedbacks = db.query(Feedback).filter(
+        Feedback.UserId == current_user.UserId
+    ).all()
+
+    return [{"history_id": fb.HistoryId} for fb in feedbacks]
+
+'''@app.get('/feedback/my')
 def get_my_feedback(
         current_user=Depends(get_current_user),
         db: Session = Depends(get_db)
@@ -779,7 +870,7 @@ def get_my_feedback(
             "feedback_image_path": f.FeedbackImagePath
         }
         for f in feedbacks
-    ]
+    ]'''
 
 
 @app.get('/stats/my')
@@ -800,6 +891,17 @@ def get_my_stats(
     ).group_by(func.date(History.TimeStamp)).order_by(func.date(History.TimeStamp)).all()
 
     daily_checks = [{"date": str(day.date), "count": day.count} for day in daily_activity]
+    '''# Сдвигаем даты на 30 дней назад
+    daily_checks = []
+    for day in daily_activity:
+        # Преобразуем строку даты в datetime объект
+        original_date = datetime.strptime(str(day.date), '%Y-%m-%d')
+        # Сдвигаем на 30 дней назад
+        shifted_date = original_date - timedelta(days=30)
+        daily_checks.append({
+            "date": shifted_date.strftime('%Y-%m-%d'),
+            "count": day.count
+        })'''
 
     confidence_distribution = {
         "very_low": db.query(History).filter(
@@ -822,6 +924,11 @@ def get_my_stats(
         ).count()
     }
 
+    '''# Корректируем LastActiveAt, если он существует
+    last_active_adjusted = None
+    if current_user.LastActiveAt:
+        last_active_adjusted = adjust_timestamp_to_30days_ago(current_user.LastActiveAt).isoformat()'''
+
     return {
         "total_checks": current_user.TotalChecks,
         "real_count": current_user.TotalRealChecks,
@@ -837,8 +944,7 @@ def get_my_stats(
         "false_ai": current_user.TotalFalseAI,
         "model_accuracy": current_user.AccuracyScore,
         "favorites_count": current_user.TotalFavorites,
-        "quality_score": current_user.QualityScore,
-        "last_active": current_user.LastActiveAt.isoformat() if current_user.LastActiveAt else None,
+        "last_active": current_user.LastActiveAt.isoformat() if current_user.LastActiveAt else None, #last_active_adjusted, #
         "daily_activity": daily_checks,
         "confidence_distribution": confidence_distribution,
         "avg_confidence_real": round(db.query(func.avg(History.Confidence)).filter(
@@ -852,7 +958,7 @@ def get_my_stats(
     }
 
 
-@app.get('/stats/leaderboard')
+'''@app.get('/stats/leaderboard')
 def get_leaderboard(
         limit: int = Query(10, ge=1, le=50),
         db: Session = Depends(get_db)
@@ -881,8 +987,37 @@ def get_leaderboard(
             }
             for user in top_by_activity
         ]
-    }
+    }'''
 
+
+# ВРЕМЕННЫЙ скрипт для очистки старых гостевых файлов
+
+'''def cleanup_legacy_guest_files():
+    """Одноразовая очистка старых гостевых файлов"""
+    with SessionLocal() as db:
+        deleted_count = 0
+        if UPLOAD_DIR.exists():
+            for file_path in UPLOAD_DIR.iterdir():
+                if file_path.is_file():
+                    # Проверяем, принадлежит ли файл существующему пользователю
+                    # Формат: {user_id}_...
+                    parts = file_path.stem.split('_')
+                    if len(parts) > 0 and parts[0].isdigit():
+                        user_id = int(parts[0])
+                        user_exists = db.query(User).filter(User.UserId == user_id).first()
+                        if not user_exists:
+                            file_path.unlink()
+                            deleted_count += 1
+                            print(f"Deleted orphan file: {file_path}")
+                    else:
+                        # Файл без user_id (гостевой) - удаляем
+                        file_path.unlink()
+                        deleted_count += 1
+                        print(f"Deleted guest file: {file_path}")
+
+        print(f"Cleaned up {deleted_count} legacy guest files")'''
+
+# cleanup_legacy_guest_files()
 
 if __name__ == '__main__':
     uvicorn.run(app, host="0.0.0.0", port=3000, reload=True)

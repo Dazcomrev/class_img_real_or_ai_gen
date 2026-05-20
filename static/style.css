@@ -18,12 +18,21 @@ canvas {
     transform: scale(1.1);
 }
 
+.image-container .relative {
+    margin-bottom: 28px; /* Резервируем место для кнопки */
+}
+
 .download-btn {
-    transition: all 0.2s ease;
+    position: absolute;
+    bottom: -24px;
+    left: 50%;
+    transform: translateX(-50%);
+    transition: background-color 0.2s ease;
 }
 
 .download-btn:hover {
-    transform: translateX(-50%) scale(1.05);
+    transform: translateX(-50%);
+    background-color: #1e40af;
 }
 
 /* Мобильная версия (только для экранов меньше 768px) */
